@@ -1,26 +1,357 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* =============================================================================
+   HCMS design tokens — "Ink & Signal"
+
+   The governing constraint: this product speaks in colour. Red, amber and green
+   are RESERVED VOCABULARY for severity and SLA state, so the brand may not
+   spend them. Indigo was chosen precisely because it collides with nothing in
+   that vocabulary — unlike the teal it replaces, which sat between "info blue"
+   and "success green" and blurred the one signal students rely on.
+
+   Neutrals carry the personality instead: warm paper against deep blue-black
+   ink. Warm ground, cool ink — legible on a cheap phone in a dim corridor,
+   which is where this is actually used.
+   ========================================================================== */
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --radius: 0.625rem;
+
+  /* Warm paper, not cold slate — this is read on cheap screens in poor light. */
+  --background: oklch(0.985 0.005 80);
+  --foreground: oklch(0.2 0.024 266);
+
+  --card: oklch(0.997 0.002 80);
+  --card-foreground: oklch(0.2 0.024 266);
+
+  --popover: oklch(0.997 0.002 80);
+  --popover-foreground: oklch(0.2 0.024 266);
+
+  /* Indigo: deliberately outside the severity/SLA vocabulary. */
+  --primary: oklch(0.475 0.16 272);
+  --primary-foreground: oklch(0.99 0.005 272);
+  --primary-soft: oklch(0.945 0.028 272);
+
+  --secondary: oklch(0.963 0.006 80);
+  --secondary-foreground: oklch(0.3 0.022 266);
+
+  --muted: oklch(0.963 0.006 80);
+  --muted-foreground: oklch(0.487 0.018 266);
+
+  --accent: oklch(0.95 0.022 272);
+  --accent-foreground: oklch(0.36 0.09 272);
+
+  /* --- Reserved vocabulary: never used for branding --- */
+  --destructive: oklch(0.552 0.208 27);
+  --destructive-foreground: oklch(0.99 0 0);
+
+  /* Darkened from 0.70/0.56 so they clear 4.5:1 as TEXT on a card — these are
+     used for labels like "Past deadline", not only as fills. Amber at 0.70 was
+     2.74:1, which is unreadable for anyone with reduced contrast sensitivity. */
+  --success: oklch(0.545 0.128 157);
+  --success-foreground: oklch(0.99 0 0);
+
+  --warning: oklch(0.565 0.152 68);
+  --warning-foreground: oklch(0.99 0.01 68);
+
+  --info: oklch(0.55 0.13 254);
+  --info-foreground: oklch(0.99 0 0);
+
+  /* The job tag — the signature surface (ticket code + countdown). */
+  --tag: oklch(0.945 0.016 272);
+  --tag-foreground: oklch(0.34 0.09 272);
+  --tag-border: oklch(0.87 0.035 272);
+
+  --border: oklch(0.906 0.006 80);
+  --input: oklch(0.888 0.007 80);
+  --ring: oklch(0.475 0.16 272);
+
+  --chart-1: oklch(0.475 0.16 272);
+  --chart-2: oklch(0.6 0.13 157);
+  --chart-3: oklch(0.7 0.152 68);
+  --chart-4: oklch(0.552 0.208 27);
+  --chart-5: oklch(0.56 0.15 318);
+  --chart-6: oklch(0.58 0.12 220);
+}
+
+.dark {
+  --background: oklch(0.172 0.018 266);
+  --foreground: oklch(0.958 0.004 80);
+
+  --card: oklch(0.214 0.021 266);
+  --card-foreground: oklch(0.958 0.004 80);
+
+  --popover: oklch(0.214 0.021 266);
+  --popover-foreground: oklch(0.958 0.004 80);
+
+  --primary: oklch(0.735 0.135 274);
+  --primary-foreground: oklch(0.17 0.035 274);
+  --primary-soft: oklch(0.292 0.055 274);
+
+  --secondary: oklch(0.262 0.02 266);
+  --secondary-foreground: oklch(0.93 0.006 80);
+
+  --muted: oklch(0.262 0.02 266);
+  --muted-foreground: oklch(0.722 0.016 266);
+
+  --accent: oklch(0.302 0.042 274);
+  --accent-foreground: oklch(0.9 0.035 274);
+
+  --destructive: oklch(0.672 0.185 27);
+  --destructive-foreground: oklch(0.16 0.03 27);
+
+  --success: oklch(0.712 0.13 157);
+  --success-foreground: oklch(0.16 0.03 157);
+
+  --warning: oklch(0.792 0.148 74);
+  --warning-foreground: oklch(0.2 0.05 74);
+
+  --info: oklch(0.712 0.12 254);
+  --info-foreground: oklch(0.16 0.03 254);
+
+  --tag: oklch(0.278 0.045 274);
+  --tag-foreground: oklch(0.855 0.06 274);
+  --tag-border: oklch(0.372 0.06 274);
+
+  --border: oklch(0.308 0.019 266);
+  --input: oklch(0.332 0.02 266);
+  --ring: oklch(0.735 0.135 274);
+
+  --chart-1: oklch(0.735 0.135 274);
+  --chart-2: oklch(0.72 0.13 157);
+  --chart-3: oklch(0.792 0.148 74);
+  --chart-4: oklch(0.672 0.185 27);
+  --chart-5: oklch(0.7 0.14 318);
+  --chart-6: oklch(0.7 0.11 220);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-soft: var(--primary-soft);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-tag: var(--tag);
+  --color-tag-foreground: var(--tag-foreground);
+  --color-tag-border: var(--tag-border);
+
+  /* IBM Plex: one family designed as a system for an engineering company.
+     Condensed headings are not only characterful — they buy ~15% horizontal
+     room, which matters more than anything else at 360px. */
+  --font-sans: var(--font-plex), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-plex-condensed), var(--font-plex), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, SFMono-Regular, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    text-rendering: optimizeLegibility;
+    /* Stops iOS Safari growing type in landscape. */
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    text-wrap: balance;
+  }
+
+  /* Tabular figures everywhere a number is compared or counted down. */
+  .tabular-nums,
+  time,
+  [data-numeric] {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* iOS zooms the page when a focused input is under 16px. Never let it. */
+  input,
+  select,
+  textarea {
+    font-size: max(16px, 1rem);
+  }
+
+  @media (min-width: 640px) {
+    input,
+    select,
+    textarea {
+      font-size: 0.875rem;
+    }
+  }
+
+  /* Visible, consistent focus for keyboard users (WCAG 2.4.7) */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
+
+  /* Thin scrollbars that respect the theme */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .text-pretty {
+    text-wrap: pretty;
+  }
+
+  /* Subtle grid backdrop used on marketing / auth surfaces */
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, color-mix(in oklch, var(--border) 55%, transparent) 1px, transparent 1px),
+      linear-gradient(to bottom, color-mix(in oklch, var(--border) 55%, transparent) 1px, transparent 1px);
+    background-size: 44px 44px;
+  }
+
+  /* ---- The job tag: the signature surface --------------------------------
+     A complaint's code is the one string a student writes down, screenshots and
+     quotes back. It is treated as a physical maintenance tag rather than as
+     small print. */
+  .job-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.1875rem 0.5rem;
+    border: 1px solid var(--tag-border);
+    border-radius: calc(var(--radius) - 4px);
+    background: var(--tag);
+    color: var(--tag-foreground);
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+
+  /* The punched hole that makes it read as a tag rather than a chip. */
+  .job-tag::before {
+    content: "";
+    width: 0.3125rem;
+    height: 0.3125rem;
+    border-radius: 9999px;
+    border: 1px solid currentColor;
+    opacity: 0.5;
+    flex: none;
+  }
+
+  /* ---- Safe areas: the bottom bar sits over the iOS home indicator ------- */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .mb-safe {
+    margin-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  /* Clears the mobile tab bar so the last card is never trapped under it. */
+  .pb-nav {
+    padding-bottom: calc(4.25rem + env(safe-area-inset-bottom, 0px));
+  }
+  @media (min-width: 1024px) {
+    .pb-nav {
+      padding-bottom: 0;
+    }
+  }
+
+  /* Horizontal scrollers (filter chips, tables) without a visible bar. */
+  .scroll-x {
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+  .scroll-x::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Every interactive element clears the 44px touch target on coarse input. */
+  @media (pointer: coarse) {
+    .touch-target {
+      min-height: 44px;
+      min-width: 44px;
+    }
+  }
+
+  .card-elevated {
+    box-shadow:
+      0 1px 2px 0 color-mix(in oklch, var(--foreground) 6%, transparent),
+      0 8px 24px -12px color-mix(in oklch, var(--foreground) 14%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
 }

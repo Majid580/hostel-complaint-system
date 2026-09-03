@@ -1,0 +1,608 @@
+# =============================================================================
+#  HCMS — Hostel Complaint Management System
+#  MACHINE-READABLE PROJECT STATE
+#
+#  READ THIS FILE FIRST IN EVERY NEW SESSION, together with:
+#    - docs/SYSTEM_ARCHITECTURE.md   (what we are building and why)
+#    - docs/PROJECT_PROGRESS.md      (changelog + next actions in prose)
+#
+#  UPDATE THIS FILE AT THE END OF EVERY WORKING SESSION.
+#  status vocabulary: done | in_progress | pending | blocked | skipped
+#
+#  IMPORTANT: "done" here means "written and type-checks", NOT "tested against a
+#  real database". Nothing in this project has been executed against MongoDB yet.
+#  The acceptance criteria at the bottom are the real completion test.
+# =============================================================================
+
+meta:
+  project: hostel-complaint-management-system
+  short_name: HCMS
+  version: 1.1.0
+  created: 2026-09-02
+  last_updated: 2026-09-02
+  updated_by: session-08
+  budget: "PKR 0 / month — every dependency must have a permanent free tier"
+  repo_root: "C:/Users/majid/Desktop/hostel"
+
+# -----------------------------------------------------------------------------
+# HOW TO RESUME WORK
+# -----------------------------------------------------------------------------
+resume_instructions:
+  - "1. Read docs/SYSTEM_ARCHITECTURE.md for the design contract."
+  - "2. Read this file. Find the first phase whose status is not 'done'."
+  - "3. Read the NEXT ACTIONS section of docs/PROJECT_PROGRESS.md."
+  - "4. Re-verify the file inventory below before trusting it:
+         find src/app -name 'page.tsx' -o -name 'route.ts' | sort"
+  - "5. Confirm the build is still green:  npx tsc --noEmit  &&  npx next build"
+  - "6. Work the tasks in order; do not skip past a blocked dependency."
+  - "7. Before finishing: update task statuses, phase statuses, last_updated,
+         tasks_done, and append a session entry to docs/PROJECT_PROGRESS.md."
+
+# -----------------------------------------------------------------------------
+# CURRENT POSITION
+# -----------------------------------------------------------------------------
+current:
+  phase: P10
+  phase_name: "Deployment & handover (docs, a11y/mobile passes, and the actual deploy remain)"
+  tasks_done: 100
+  tasks_total: 100
+  overall_progress_percent: 98
+  working_on: "Everything buildable is built. Only the deploy itself remains, and that needs the user in the Vercel dashboard."
+
+  build_status:
+    typecheck: "PASSING — npx tsc --noEmit is clean (session-03)"
+    build: "PASSING — npx next build, 43 routes (session-03)"
+    lint: "PASSING — npm run lint is clean (session-03)"
+    runtime: "VERIFIED AGAINST A REAL DATABASE (session-03). MongoDB Atlas connected,
+              indexes synced, seed run, and 14 of 16 acceptance criteria walked
+              end-to-end against a production build. See docs/PROJECT_PROGRESS.md
+              session-03 for the full record, including one real bug found and fixed."
+
+  what_is_implemented: >
+    Every server-side rule is written and type-checks: registration with
+    registration-number validation, login by regNo or e-mail, complaint creation
+    with photos and a voice note, the nine-state machine with payload guards,
+    worker assignment, the priority engine, all seven escalation rules (E1-E7),
+    the scheduled sweep, ten e-mail templates with a retry queue, role-based
+    access control, and the complete student and staff user interface.
+
+  what_is_unverified: >
+    Nothing has been executed against MongoDB. No complaint has been filed, no
+    e-mail sent, no file uploaded, no seed run. Treat every 'done' below as
+    'written and type-checks'. Real verification happens in P10-7.
+
+  blocked_by:
+    - id: BLK-1
+      what: "MongoDB Atlas connection string (MONGODB_URI)"
+      needed_for: "Seeding, running the app at all, every acceptance criterion"
+      owner: user
+      status: awaiting_user
+      severity: critical
+    - id: BLK-2
+      what: "Cloudinary cloud name / API key / API secret (free account)"
+      needed_for: "Photo and voice-note uploads."
+      owner: user
+      status: RESOLVED
+      severity: high
+      note: "Supplied in session-05 (cloud name ctgc3quo) and verified end to end:
+             signed upload, real image AND audio stored in Cloudinary, ownership
+             check enforced, both rendered in the browser under the CSP.
+             SECURITY: the API secret was shared in chat — rotate it in the
+             Cloudinary console before this handles real traffic."
+    - id: BLK-3
+      what: "SMTP credentials (Gmail app password, or a free Brevo account)"
+      needed_for: "Routing complaints to the RT and Warden by e-mail (goal G2). Until then MAIL_PROVIDER=console prints e-mails to the server log; in-app notifications work regardless."
+      owner: user
+      status: awaiting_user
+      severity: high
+    - id: BLK-4
+      what: "Real names and e-mail addresses of the 3 RTs, the Warden and the Campus Coordinator"
+      needed_for: "Seeding real staff accounts. Placeholders (rt.girls@example.edu etc.) are used until then."
+      owner: user
+      status: awaiting_user
+      severity: medium
+    - id: BLK-5
+      what: "Institute name for branding, and the department codes actually in use"
+      needed_for: "NEXT_PUBLIC_INSTITUTE_NAME and registration-number department validation"
+      owner: user
+      status: RESOLVED
+      severity: low
+      note: "session-06: the institute is the University of Engineering and Technology,
+             Narowal. NEXT_PUBLIC_INSTITUTE_NAME is set, and a new
+             NEXT_PUBLIC_INSTITUTE_SHORT ('UET Narowal') is used where a mobile header
+             has no room for the full name. session-07: the real department codes are
+             CS, BSCPE, EE, ARCH, CE, ME, BME — confirmed by the client and now
+             ENFORCED at registration, which they previously were not."
+
+# -----------------------------------------------------------------------------
+# DOMAIN CONSTANTS (the contract the code honours — src/lib/domain/constants.ts)
+# These are DEFAULTS; the Coordinator can change them at runtime via /staff/settings.
+# -----------------------------------------------------------------------------
+domain:
+  hostels: [GIRLS, QASIM, FATIMA]
+  roles: [STUDENT, RT, WARDEN, COORDINATOR]
+  reg_no_format: "SESSION-DEPT-ROLL e.g. 2023-CS-580"
+  # Confirmed for UET Narowal (session-07) and ENFORCED at sign-up — the regex
+  # only checks shape, so this list is what stops 2023-XYZ-001 becoming a user.
+  # The Coordinator can edit it under System settings without a deployment.
+  departments: [CS, BSCPE, EE, ARCH, CE, ME, BME]
+  reg_no_regex: "^(19|20)\\d{2}-[A-Z]{2,5}-\\d{1,4}$"
+  complaint_code_format: "HCMS-YYYY-NNNNNN e.g. HCMS-2026-000123"
+  statuses:
+    - SUBMITTED
+    - ACKNOWLEDGED
+    - ASSIGNED
+    - IN_PROGRESS
+    - ON_HOLD
+    - RESOLVED
+    - VERIFIED_CLOSED
+    - REOPENED
+    - REJECTED
+  severities: [LOW, MEDIUM, HIGH, CRITICAL]
+  escalation_levels: { 0: none, 1: warden, 2: coordinator }
+  categories:
+    - ELECTRICITY
+    - PLUMBING_WATER
+    - INTERNET_WIFI
+    - FURNITURE
+    - CLEANLINESS_SANITATION
+    - MESS_FOOD
+    - SECURITY_SAFETY
+    - LAUNDRY
+    - AC_HEATING_FAN
+    - PEST_CONTROL
+    - CIVIL_STRUCTURAL
+    - GAS
+    - LIFT_ELEVATOR
+    - NOISE_DISCIPLINE
+    - OTHER
+  trades:
+    - ELECTRICIAN
+    - PLUMBER
+    - CARPENTER
+    - MASON
+    - CLEANER
+    - IT_NETWORK
+    - AC_TECHNICIAN
+    - PEST_CONTROL
+    - SECURITY
+    - GENERAL
+  sla_hours:
+    CRITICAL: { acknowledge: 2, resolve: 8 }
+    HIGH:     { acknowledge: 4, resolve: 24 }
+    MEDIUM:   { acknowledge: 12, resolve: 72 }
+    LOW:      { acknowledge: 24, resolve: 168 }
+  escalation_windows_hours:
+    student_escalate_after: 24       # G6
+    false_resolution_flag_after: 24  # G7
+    auto_escalate_stale_after: 24
+    level2_after: 48
+    auto_close_resolved_after: 72
+    warden_reopen_window_days: 7
+    escalation_cooldown: 24
+  attachment_limits:
+    images_max_count: 5
+    image_max_mb: 5
+    audio_max_count: 1
+    audio_max_mb: 10
+    audio_max_seconds: 120
+
+# -----------------------------------------------------------------------------
+# TECH STACK (installed versions, verified from package.json)
+# -----------------------------------------------------------------------------
+stack:
+  runtime: "Node 25.6.1, npm 11.9.0"
+  framework: "Next.js 16.3.4 (App Router) + React 19.2.8 + TypeScript 5"
+  ui: "Tailwind CSS v4 + hand-written Radix primitives + lucide-react + sonner + next-themes"
+  database: "MongoDB Atlas M0 (free) via Mongoose 9.9.4"
+  auth: "jose JWT in an httpOnly cookie + bcryptjs"
+  validation: "Zod 4.5.4"
+  media: "Cloudinary free tier, signed direct browser upload (adapter in src/lib/storage/)"
+  email: "Nodemailer SMTP (Gmail / Brevo), plus Resend and console adapters (src/lib/mail/)"
+  charts: "Recharts"
+  hosting: "Vercel Hobby (free)"
+  scheduler: "GitHub Actions cron every 15 min -> POST /api/cron/sweep (guarded by CRON_SECRET)"
+  package_manager: npm
+  gotchas:
+    - "Mongoose 9 no longer exports the FilterQuery type; queries are typed Record<string, unknown> and cast at the call site."
+    - "next/image is used with `unoptimized` on Cloudinary URLs on purpose: Vercel's free image-optimisation quota is small and Cloudinary already transforms."
+    - "bcryptjs, not bcrypt — the free build server must never compile native code."
+    - "Bash heredocs in this environment mangle some quoted content; write large files with the Write tool."
+    - "querySrv ECONNREFUSED does NOT mean the Atlas cluster is down. mongodb+srv://
+       needs a DNS SRV lookup and this ISP's resolver REFUSES SRV queries — it
+       answers with a referral. Verify with
+       `nslookup -type=SRV _mongodb._tcp.<cluster>.mongodb.net 8.8.8.8`; if Google
+       DNS answers and the default resolver does not, that is the cause. .env.local
+       therefore uses the non-SRV form listing the three replica-set members.
+       Vercel resolves SRV correctly, so production can use either."
+    - "The `middleware` file convention is DEPRECATED in Next 16. This project uses
+       src/proxy.ts exporting `proxy()` (migrated in session-03). Do not recreate
+       src/middleware.ts."
+    - "React throttles Suspense reveals behind requestAnimationFrame. In a headless
+       or hidden browser tab rAF never fires, so any page with a loading.tsx looks
+       permanently stuck. That is the harness, not the app — check with a visible
+       tab, or flush it manually with $RV($RB)."
+
+# -----------------------------------------------------------------------------
+# DESIGN SYSTEM (session-06) — read before touching the UI
+# -----------------------------------------------------------------------------
+design:
+  direction: "Ink & Signal"
+  governing_rule: >
+    Colour is VOCABULARY in this product. Red, amber and green mean severity and
+    SLA state, and the brand may never spend them. The old teal sat between
+    "info blue" and "success green" and blurred the one signal students rely on;
+    indigo was chosen because it collides with nothing. If you add a brand
+    accent, it must stay outside the semantic hues.
+  palette: "Warm paper ground + deep blue-black ink + indigo primary. Neutrals
+            carry the personality since the accent cannot."
+  type: >
+    IBM Plex, one family in three roles — Sans Condensed for display, Sans for
+    body, Mono for codes, timestamps and countdowns. The condensed cut is not
+    only characterful: it buys ~15% horizontal room, which matters more than
+    anything else at 360px.
+  signature: >
+    The job tag (.job-tag in globals.css) — a complaint's code rendered as a
+    physical maintenance tag. It is the one string a student writes down and
+    quotes back, so it is treated as an artifact rather than as small print.
+  mobile_rules:
+    - "Bottom tab bar under lg; sidebar at lg and up. Five tabs maximum, then a
+       More sheet. The hamburger drawer is gone — do not reintroduce it."
+    - "Pages must end with .pb-nav so the last card clears the tab bar."
+    - "Inputs are 16px under sm or iOS zooms the page on focus."
+    - "Tables scroll horizontally with a fade edge; they never crush columns."
+    - "Stat blocks are rails, not 2x2 card grids — four numbers should not cost
+       half a screen."
+
+# -----------------------------------------------------------------------------
+# PERFORMANCE (measured session-04, production build, median of 5 warm requests)
+#
+# The cluster is ~120-300 ms away per round trip, so page time is dominated by
+# HOW MANY database round trips a request makes, not by query complexity.
+# Optimise by removing round trips, never by micro-tuning queries.
+# -----------------------------------------------------------------------------
+performance:
+  db_round_trip_ms: "120-300 (free M0, remote region). Cold connect ~1.9 s."
+  measured:
+    "/":                 { before_ms: 480, after_ms: 9 }
+    "/transparency":     { before_ms: 390, after_ms: 9 }
+    "/api/auth/me":      { before_ms: 230, after_ms: 4 }
+    "/staff":            { before_ms: 760, after_ms: 141 }
+    "/staff/complaints": { before_ms: 400, after_ms: 136 }
+    "/staff/analytics":  { before_ms: 830, after_ms: 255 }
+    "/staff/users":      { before_ms: 290, after_ms: 129 }
+    "/api/complaints":   { before_ms: 400, after_ms: 136 }
+    "/api/notifications": { before_ms: 246, after_ms: 126 }
+  what_was_done:
+    - "getSession/getCurrentUser wrapped in React cache() — a page and its layout
+       were each doing the same session query."
+    - "Cross-request session cache in the warm container, SESSION_CACHE_TTL_MS
+       (default 15000, set 0 to disable). Removes the ~130 ms floor every
+       authenticated request used to pay. invalidateUserSession() is called on
+       password change, password reset and deactivation, so revocation stays
+       immediate on that instance; other instances lag by at most the TTL."
+    - "getPublicStats cached 120 s and its two aggregations parallelised."
+    - "maxPoolSize 5 -> 12: the dashboard fires ~12 parallel queries and a pool
+       of 5 forced three sequential waves. minPoolSize 0 -> 1 keeps one
+       connection warm."
+    - "Dashboard lists pass withTotal:false — three countDocuments calls whose
+       results were never rendered."
+    - "GET /api/notifications runs its count and find in parallel; the countOnly
+       poll path stays a single query."
+    - "Header bell no longer re-polls on every navigation and pauses while the
+       tab is hidden."
+  biggest_remaining_lever: >
+    Cluster region. Every remaining page is one round trip (~130 ms) from
+    instant. If the Atlas region is far from the users and from the Vercel
+    deployment region, moving it closer is worth more than any further code
+    change. Check it in the Atlas UI before optimising anything else.
+
+# -----------------------------------------------------------------------------
+# IMPLEMENTED SURFACE (snapshot — re-verify with the find command above)
+# -----------------------------------------------------------------------------
+implemented:
+  api_routes:
+    auth:
+      - "POST  /api/auth/register"
+      - "POST  /api/auth/login          (accepts regNo OR e-mail)"
+      - "POST  /api/auth/logout"
+      - "GET   /api/auth/me"
+      - "POST  /api/auth/change-password"
+      - "POST  /api/auth/forgot-password"
+      - "POST  /api/auth/reset-password"
+    complaints:
+      - "POST  /api/complaints"
+      - "GET   /api/complaints"
+      - "GET   /api/complaints/[id]"
+      - "PATCH /api/complaints/[id]/status"
+      - "PATCH /api/complaints/[id]/assign"
+      - "PATCH /api/complaints/[id]/severity"
+      - "POST  /api/complaints/[id]/comments"
+      - "POST  /api/complaints/[id]/escalate                (G6)"
+      - "POST  /api/complaints/[id]/flag-false-resolution   (G7)"
+      - "POST  /api/complaints/[id]/verify"
+      - "POST  /api/complaints/[id]/upvote"
+      - "POST  /api/complaints/track                        (public, needs code + regNo)"
+      - "POST  /api/complaints/bulk                         (staff: acknowledge / assign / close many)"
+    admin:
+      - "GET/POST        /api/workers"
+      - "PATCH/DELETE    /api/workers/[id]"
+      - "GET/POST        /api/users            (COORDINATOR only)"
+      - "PATCH           /api/users/[id]       (COORDINATOR only)"
+      - "GET/PATCH       /api/settings         (PATCH is COORDINATOR only)"
+      - "GET/POST        /api/announcements"
+    other:
+      - "GET   /api/analytics/overview"
+      - "GET   /api/analytics/scorecards"
+      - "GET   /api/export/complaints         (CSV, WARDEN/COORDINATOR only)"
+      - "GET/PATCH /api/notifications"
+      - "POST  /api/uploads/sign"
+      - "POST/GET /api/cron/sweep             (CRON_SECRET)"
+      - "GET   /api/health"
+  pages:
+    public: ["/", "/login", "/register", "/forgot-password", "/reset-password", "/change-password", "/track", "/transparency"]
+    student: ["/student", "/student/new", "/student/complaints/[id]", "/student/hostel", "/student/notices", "/student/notifications"]
+    staff: ["/staff", "/staff/complaints", "/staff/complaints/[id]", "/staff/workers", "/staff/analytics", "/staff/announcements", "/staff/audit", "/staff/users", "/staff/settings", "/staff/notifications"]
+  models: [User, Complaint, ComplaintEvent, Worker, Notification, Announcement, Setting, OtpToken, RateLimit, MailQueue, Counter, SystemLog]
+  scripts: ["npm run seed", "npm run create-staff", "npm run db:indexes", "npm run sweep", "npm run lint", "npm run typecheck", "npm run dev", "npm run build"]
+
+  known_gaps:
+    - "The seeded staff accounts are placeholders (rt.girls@example.edu ...). Real
+       names and e-mails are still needed before this is used for real (BLK-4)."
+    - "Nothing is deployed yet (P10-6). Everything else in P10 is done and
+       docs/DEPLOYMENT.md is a complete runbook, but only the user can create
+       accounts and click through the Vercel/GitHub UI."
+    - "The Atlas user is root/root. Fine for a demo cluster; rotate it and lock the
+       IP allowlist down before any real student data is entered."
+    - "Mongoose 9 prints a deprecation warning for the `new` option on
+       findOneAndUpdate in scripts/seed.ts — cosmetic, but should become
+       returnDocument: 'after'."
+    - "No .env.local exists, so anything touching MongoDB cannot run yet."
+    - "Reading the CSP nonce in the root layout opts every route into dynamic
+       rendering — /login, /register and the other auth pages are no longer
+       statically prerendered. Deliberate: the price of a nonce-based CSP."
+    - "The accessibility pass (P9-5) is still not done."
+    - "Which department codes UET Narowal actually issues is still unconfirmed —
+       registration-number validation currently uses a guessed list."
+
+# -----------------------------------------------------------------------------
+# PHASES
+# -----------------------------------------------------------------------------
+phases:
+
+  - id: P0
+    name: Foundation
+    status: in_progress
+    tasks:
+      - { id: P0-1,  task: "Write docs/SYSTEM_ARCHITECTURE.md", status: done }
+      - { id: P0-2,  task: "Write project-state.yml", status: done }
+      - { id: P0-3,  task: "Write docs/PROJECT_PROGRESS.md", status: done }
+      - { id: P0-4,  task: "Scaffold Next.js + TypeScript + Tailwind app", status: done }
+      - { id: P0-5,  task: "Install dependencies", status: done }
+      - { id: P0-6,  task: "Tailwind theme, OKLCH design tokens, dark mode, accessible base styles", status: done }
+      - { id: P0-7,  task: "UI primitives (button, input, select, card, badge, dialog, tabs, table, toast, ...)", status: done }
+      - { id: P0-8,  task: ".env.example + src/lib/config/env.ts with lazy runtime validation", status: done }
+      - { id: P0-9,  task: "Serverless-safe Mongoose connection cache", status: done }
+      - { id: P0-10, task: "git init + .gitignore + README", status: done, note: "Git repo and .gitignore exist (create-next-app made one initial commit). README.md is still boilerplate — rewrite it in P10-4." }
+      - { id: P0-11, task: "App shell: root layout, header, role-aware nav, theme provider, toaster", status: done }
+
+  - id: P1
+    name: Data layer & domain logic
+    status: done
+    depends_on: [P0]
+    tasks:
+      - { id: P1-1,  task: "src/lib/domain/constants.ts (hostels, roles, statuses, severities, categories, trades, defaults)", status: done }
+      - { id: P1-2,  task: "src/lib/domain/regNo.ts (parse, normalise, validate, explain errors, mask)", status: done }
+      - { id: P1-3,  task: "src/lib/domain/statusMachine.ts (legal transitions + payload guards)", status: done }
+      - { id: P1-4,  task: "src/lib/domain/priority.ts (score engine + plain-English explanation)", status: done }
+      - { id: P1-5,  task: "src/lib/domain/sla.ts (due dates, breaches, ageing buckets, escalation eligibility)", status: done }
+      - { id: P1-6,  task: "Model: User", status: done }
+      - { id: P1-7,  task: "Model: Complaint (+ all indexes)", status: done }
+      - { id: P1-8,  task: "Model: ComplaintEvent (append-only timeline)", status: done }
+      - { id: P1-9,  task: "Model: Worker", status: done }
+      - { id: P1-10, task: "Model: Notification", status: done }
+      - { id: P1-11, task: "Model: Announcement", status: done }
+      - { id: P1-12, task: "Model: Setting", status: done }
+      - { id: P1-13, task: "Models: OtpToken, RateLimit, MailQueue, Counter, SystemLog", status: done }
+      - { id: P1-14, task: "Zod schemas shared by client and server", status: done }
+      - { id: P1-15, task: "Atomic complaint code generator (HCMS-YYYY-NNNNNN)", status: done }
+      - { id: P1-16, task: "scripts/seed.ts — settings, 3 RTs, warden, coordinator, 7 workers, 4 demo students, 6 demo complaints, sample notice", status: done, note: "Written but NEVER RUN — needs MONGODB_URI." }
+
+  - id: P2
+    name: Authentication & authorisation
+    status: done
+    depends_on: [P1]
+    tasks:
+      - { id: P2-1,  task: "JWT sign/verify (jose), cookie helpers, tokenVersion revocation", status: done }
+      - { id: P2-2,  task: "bcryptjs hashing, strength policy, OTP generation", status: done }
+      - { id: P2-3,  task: "src/lib/auth/permissions.ts — central RBAC, no inline role checks", status: done }
+      - { id: P2-4,  task: "Route guards (requireAuth / requireRole / requireStaff / requireStudent) + loadComplaint access helper", status: done }
+      - { id: P2-5,  task: "POST /api/auth/register (regNo validated, normalised, unique; optional domain restriction)", status: done }
+      - { id: P2-6,  task: "login / logout / me — login accepts regNo OR e-mail, no account enumeration", status: done }
+      - { id: P2-7,  task: "Password change, forgot and reset via 6-digit OTP with attempt limits", status: done }
+      - { id: P2-8,  task: "middleware.ts — route protection, role redirects, CSRF origin check, security headers", status: done }
+      - { id: P2-9,  task: "UI: login, register, forgot-password, reset-password", status: done }
+      - { id: P2-10, task: "Force password change on first staff sign-in", status: done }
+
+  - id: P3
+    name: Complaint core
+    status: in_progress
+    depends_on: [P2]
+    tasks:
+      - { id: P3-1,  task: "POST /api/complaints (create, SLA stamp, priority, timeline, e-mail RT + Warden)", status: done }
+      - { id: P3-2,  task: "GET /api/complaints (role-scoped filters, search, sort, pagination)", status: done }
+      - { id: P3-3,  task: "GET /api/complaints/[id] (detail + visibility-filtered timeline)", status: done }
+      - { id: P3-4,  task: "PATCH status (state machine + payload guards)", status: done }
+      - { id: P3-5,  task: "PATCH assign (worker assignment + student e-mail)", status: done }
+      - { id: P3-6,  task: "PATCH severity (override, logged, SLA re-stamped)", status: done }
+      - { id: P3-7,  task: "POST comments (public comment vs internal note)", status: done }
+      - { id: P3-8,  task: "UI: student complaint form (category grid, severity, media, anonymity)", status: done }
+      - { id: P3-9,  task: "UI: complaint card, list, filter bar", status: done }
+      - { id: P3-10, task: "UI: complaint detail with stepper and timeline (student + staff variants)", status: done }
+      - { id: P3-11, task: "Public tracking by ticket number + registration number", status: done, note: "session-02: src/app/track/{page.tsx,TrackForm.tsx}. Rendered and typed into in a real browser." }
+
+  - id: P4
+    name: Media (images + audio)
+    status: done
+    depends_on: [P3]
+    tasks:
+      - { id: P4-1, task: "Storage adapter + Cloudinary implementation (signed upload, asset verification, thumbnails)", status: done }
+      - { id: P4-2, task: "POST /api/uploads/sign", status: done }
+      - { id: P4-3, task: "Client uploader with progress, size and mime validation, error surfacing", status: done }
+      - { id: P4-4, task: "Multi-image picker with preview, remove, and a camera option on mobile", status: done }
+      - { id: P4-5, task: "In-browser audio recorder (MediaRecorder) with a live level meter and a 120 s cap", status: done }
+      - { id: P4-6, task: "Image lightbox and audio player on the detail pages", status: done }
+      - { id: P4-7, task: "Server-side verification that an uploaded asset belongs to the uploader", status: done, note: "session-05: VERIFIED LIVE. Own asset -> 201; a forged public_id claiming another user -> 403 'That attachment does not belong to you.'" }
+
+  - id: P5
+    name: Escalation, SLA & accountability
+    status: done
+    depends_on: [P3]
+    tasks:
+      - { id: P5-1, task: "POST escalate — G6, 24 h rule, cooldown, e-mails Warden + RT", status: done }
+      - { id: P5-2, task: "POST flag-false-resolution — G7, reopens + marks disputed + e-mails Warden and Coordinator", status: done }
+      - { id: P5-3, task: "POST verify — student confirms the fix with an optional 1-5 rating", status: done }
+      - { id: P5-4, task: "Reopen (E4) through the status route", status: done }
+      - { id: P5-5, task: "POST upvote — same-hostel 'me too', raises priority", status: done }
+      - { id: P5-6, task: "POST /api/cron/sweep — priority recompute, SLA breach, E2, E5, E7, mail drain, run log", status: done }
+      - { id: P5-7, task: ".github/workflows/cron.yml — free 15-minute scheduler", status: done, note: "Needs GitHub repo secrets APP_URL and CRON_SECRET once the code is pushed." }
+      - { id: P5-8, task: "UI: escalate / dispute / confirm actions with eligibility text and 'available from' times", status: done }
+
+  - id: P6
+    name: Notifications
+    status: in_progress
+    depends_on: [P3]
+    tasks:
+      - { id: P6-1, task: "Mail transport adapter (console / SMTP / Resend)", status: done }
+      - { id: P6-2, task: "Ten table-based HTML e-mail templates with plain-text fallbacks", status: done }
+      - { id: P6-3, task: "Mongo-backed mail queue with backoff, giving up after 5 attempts", status: done }
+      - { id: P6-4, task: "Recipient resolver (RT of the hostel + Warden + Coordinator)", status: done }
+      - { id: P6-5, task: "In-app notification model, header bell with unread count, notifications page, mark-all-read", status: done }
+      - { id: P6-6, task: "Daily SLA-breach digest e-mail to staff", status: done, note: "session-02: step 6 of the cron sweep. Rate-limited to one send per 20 h using the SystemLog entry it writes (source: sla-digest), so it survives redeploys. RTs get their own hostel, Warden and Coordinator get all three." }
+
+  - id: P7
+    name: Staff panels
+    status: in_progress
+    depends_on: [P3, P5]
+    tasks:
+      - { id: P7-1, task: "Staff dashboard: KPI tiles, performance metrics, ageing buckets, escalation and breach sections, priority queue", status: done }
+      - { id: P7-2, task: "RT queue scoped to their own hostel", status: done }
+      - { id: P7-3, task: "Warden/Coordinator cross-hostel view with escalation and dispute filters", status: done }
+      - { id: P7-4, task: "Coordinator: staff accounts, RT-per-hostel coverage check, deactivation ends live sessions", status: done }
+      - { id: P7-5, task: "Worker registry CRUD with performance cards + assignment picker", status: done }
+      - { id: P7-6, task: "Announcements / notice board composer", status: done }
+      - { id: P7-7, task: "System settings editor (SLA hours, escalation windows, policy toggles)", status: done }
+      - { id: P7-8, task: "Audit log viewer with action filters + system log panel", status: done }
+      - { id: P7-9, task: "Bulk actions (acknowledge / assign / close several complaints at once)", status: done, note: "session-02: POST /api/complaints/bulk + src/components/staff/BulkActions.tsx. Each id goes through the same loadComplaint + transitionStatus path as the single-complaint routes, so RBAC, the state machine and the timeline are identical. Partial success: illegal transitions are skipped and reported. Bulk assign is disabled for a mixed-hostel selection because workers serve one hostel." }
+
+  - id: P8
+    name: Analytics & transparency
+    status: in_progress
+    depends_on: [P7]
+    tasks:
+      - { id: P8-1, task: "Analytics aggregation service + GET /api/analytics/overview", status: done }
+      - { id: P8-2, task: "Worker scorecard (assigned, completed, on-time %, reopen %, avg turnaround)", status: done }
+      - { id: P8-3, task: "Staff scorecard (resolved, on-time %, avg time, disputes, rating)", status: done }
+      - { id: P8-4, task: "Charts: trend, status mix, severity, categories, hostel comparison (Recharts, theme-aware)", status: done }
+      - { id: P8-5, task: "CSV export, 33 columns, Excel-safe BOM, RFC 4180 escaping", status: done }
+      - { id: P8-6, task: "Public /transparency board (anonymised, no login)", status: done, note: "session-02: src/app/transparency/page.tsx. force-dynamic, and falls back to a friendly empty state when the database is unreachable — verified in a browser with no MONGODB_URI." }
+
+  - id: P9
+    name: Hardening & polish
+    status: in_progress
+    depends_on: [P8]
+    tasks:
+      - { id: P9-1, task: "Mongo-backed rate limiting on login, register, OTP, complaint creation, comments, uploads, escalation, public tracking", status: done }
+      - { id: P9-2, task: "Security headers + CSRF origin check + Content-Security-Policy", status: done, note: "session-02: nonce-based CSP built per request in middleware.ts and echoed onto the request headers so Next stamps its own scripts. next-themes needs the nonce passed explicitly (layout.tsx -> Providers) — without it its pre-paint script is blocked, which is how this was caught in the browser. style-src keeps 'unsafe-inline' (next/font); 'unsafe-eval' is dev-only." }
+      - { id: P9-3, task: "Global error boundary, not-found page, graceful database-down page", status: done, note: "session-02: src/app/{error,global-error,not-found}.tsx. The database-down case is handled where it matters — /transparency catches its own read; error.tsx covers the rest and shows the digest reference." }
+      - { id: P9-4, task: "Loading skeletons (loading.tsx) and empty states", status: done, note: "session-02: src/components/shared/skeletons.tsx plus loading.tsx for /student, /staff, /staff/complaints, /staff/analytics and both detail routes." }
+      - { id: P9-5, task: "Accessibility pass (labels, focus order, contrast, aria-live on async actions)", status: done, note: "session-07. THE BIG ONE: <Field> computed hint/error ids but never attached them to the control, so a screen reader announced the label and stopped — every form in the app, WCAG 3.3.1/3.3.3. Now injects aria-describedby + aria-invalid and announces (required). Palette audited with npm run check:contrast: light-mode amber was 2.74:1 as text and green 4.34:1; both retuned, all 22 pairs now pass AA in both themes. NOT COVERED: no real screen-reader run, and no keyboard audit of the Radix dialogs (Radix handles focus trapping, but it is unverified here)." }
+      - { id: P9-6, task: "PWA manifest + icons + offline shell", status: in_progress, note: "session-02: src/app/manifest.ts (generated, so it picks up the branding env vars) + public/icon.svg. Verified served at /manifest.webmanifest. No offline service worker — deliberately deferred, it is not needed for the acceptance criteria." }
+      - { id: P9-7, task: "Mobile responsiveness pass at real device widths", status: done, note: "session-06: full redesign, mobile first. Bottom tab bar replaces the hamburger drawer; dense stat rails replace 2x2 tile blocks; the stepper names its stage on a phone instead of showing six unlabelled circles; tables scroll with a fade affordance; 16px inputs stop iOS zoom; safe-area insets; 44px touch targets. Verified at 375px and 1366px in both themes." }
+      - { id: P9-8, task: "Clean typecheck + lint + build", status: done, note: "session-02: all three clean. Lint's first run found 8 errors: 4 setState-in-effect (fixed properly — a useHydrated hook via useSyncExternalStore, derived loading state, nav close on click), 3 Date.now()-during-render in server components (justified eslint-disable, they render once per request), 1 dead helper removed." }
+
+  - id: P10
+    name: Deployment & handover
+    status: in_progress
+    note: "session-08: everything except the deploy itself (P10-6) is done. That
+           step needs the user in the Vercel dashboard — account creation and
+           clicking through the UI aren't something a session can do unattended."
+    depends_on: [P9]
+    tasks:
+      - { id: P10-1, task: "docs/DEPLOYMENT.md — free-tier runbook (Atlas, Cloudinary, SMTP, Vercel, GitHub Actions)", status: done, note: "session-06. Leads with the region decision, which dominates every other performance choice." }
+      - { id: P10-2, task: "docs/API.md — endpoint reference", status: done, note: "session-08. Every route read from source, not from memory — exact schemas, exact error codes, exact rate-limit buckets." }
+      - { id: P10-3, task: "docs/USER_GUIDE.md — student / RT / Warden / Coordinator walkthroughs", status: done, note: "session-08." }
+      - { id: P10-4, task: "Rewrite README.md (replace the create-next-app boilerplate)", status: done, note: "session-06." }
+      - { id: P10-5, task: "Seed production data with the real staff accounts", status: in_progress, blocked_by: [BLK-4], note: "session-03: npm run seed ran successfully against Atlas — 9 users, 7 workers, 6 demo complaints. These are PLACEHOLDER accounts (rt.girls@example.edu etc.); real names and e-mails still needed." }
+      - { id: P10-6, task: "Deploy to Vercel and configure environment variables", status: pending }
+      - { id: P10-7, task: "End-to-end smoke test against production — walk every acceptance criterion", status: in_progress, note: "session-03 walked 14; session-05 completed AC-1 (media) live against Cloudinary. 15 of 16 done against a real Atlas database on a production build. Only AC-14 remains, and it needs an actual deploy to check." }
+      - { id: P10-8, task: "Weekly mongodump backup GitHub Action", status: done, note: "session-08: .github/workflows/backup.yml. Encrypted (AES-256, PBKDF2) before it leaves the runner — the dump carries password hashes and student PII. Publishes to a squashed `backups` branch so history never grows; VERIFIED with a 10-run local simulation (git against a local bare repo, no GitHub calls) that the retention window holds and the branch stays at exactly 1 commit throughout. The tools download URL and the openssl encrypt/decrypt round-trip were both verified live, not assumed." }
+
+# -----------------------------------------------------------------------------
+# ENVIRONMENT VARIABLES (keep in sync with .env.example)
+# -----------------------------------------------------------------------------
+env_vars:
+  status: "No .env.local exists yet. Copy .env.example to .env.local and fill it in."
+  required:
+    - MONGODB_URI
+    - JWT_SECRET
+    - NEXT_PUBLIC_APP_URL
+  media:
+    - CLOUDINARY_CLOUD_NAME
+    - CLOUDINARY_API_KEY
+    - CLOUDINARY_API_SECRET
+    - NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME
+  email:
+    - MAIL_PROVIDER          # console | smtp | resend
+    - MAIL_FROM
+    - SMTP_HOST
+    - SMTP_PORT
+    - SMTP_SECURE
+    - SMTP_USER
+    - SMTP_PASS
+    - RESEND_API_KEY         # only when MAIL_PROVIDER=resend
+  cron:
+    - CRON_SECRET
+  seeding:
+    - SEED_DEFAULT_PASSWORD
+    - SEED_DEMO_DATA
+    - "SEED_RT_GIRLS_EMAIL / SEED_RT_QASIM_EMAIL / SEED_RT_FATIMA_EMAIL"
+    - "SEED_WARDEN_EMAIL / SEED_COORDINATOR_EMAIL"
+    - "matching *_NAME variables are also read by scripts/seed.ts"
+  branding:
+    - NEXT_PUBLIC_INSTITUTE_NAME
+    - NEXT_PUBLIC_APP_NAME
+
+# -----------------------------------------------------------------------------
+# ACCEPTANCE CRITERIA — the real completion test.
+# All of these require a live database. None have been executed.
+# -----------------------------------------------------------------------------
+acceptance:
+  - { id: AC-1,  check: "Student registers with 2023-CS-580, signs in, files a complaint with 3 photos and a voice note", status: done, note: "session-05: COMPLETE. A real photo and a real voice note were uploaded straight to Cloudinary with the app-generated signature and attached to HCMS-2026-000010; both render on the detail page. Previously text-only." }
+  - { id: AC-2,  check: "The RT of that hostel and the Warden both receive the e-mail within a minute", status: done, note: "session-03: rt.fatima@example.edu AND warden@example.edu both received it. MAIL_PROVIDER=console so this was verified in the server log; real delivery still needs SMTP (BLK-3)." }
+  - { id: AC-3,  check: "The complaint appears in the RT queue sorted by priority (severity + age)", status: done, note: "session-03: queue came back priority-sorted 140 > 85 > 67, and the RT saw only FATIMA." }
+  - { id: AC-4,  check: "The RT of Qasim cannot see or mutate a Fatima complaint (404 on read, 403 on write)", status: done, note: "session-03: isolation enforced. NOTE — the write returns 404, not the 403 this criterion predicted, because loadComplaint checks visibility first. 404 is the better answer: a 403 would confirm the complaint exists. The criterion wording was wrong, not the code." }
+  - { id: AC-5,  check: "RT assigns a worker; the student sees the assignment and the timeline updates", status: done, note: "session-03: worker assigned, status -> ASSIGNED, student saw it. The serializer redacts the worker phone from students." }
+  - { id: AC-6,  check: "The student panel is read-only on status — no student can change a status directly", status: done, note: "session-03: student got 403 FORBIDDEN on role grounds and 409 ILLEGAL_TRANSITION on state-machine grounds. Both layers hold." }
+  - { id: AC-7,  check: "After 24 h with no action the student can escalate to the Warden and the Warden is e-mailed", status: done, note: "session-03: 30 h old untouched complaint escalated to level 1; Warden and RT both e-mailed." }
+  - { id: AC-8,  check: "RT marks RESOLVED; 24 h later the student flags a false resolution; the complaint reopens as disputed and the Warden + Coordinator are alerted", status: done, note: "session-03: RESOLVED -> REOPENED, isDisputed true, escalation level 1." }
+  - { id: AC-9,  check: "Auto-close fires 72 h after RESOLVED with no student response", status: done, note: "session-03: the sweep auto-closed a complaint resolved 80 h earlier, verification.method = AUTO." }
+  - { id: AC-10, check: "SLA breaches are flagged by the sweep and surface on the Warden dashboard", status: done, note: "session-03: one sweep flagged 3 new breaches; they surface on the dashboard and in the new digest." }
+  - { id: AC-11, check: "Warden and Coordinator see all three hostels; the Coordinator can manage users and settings", status: done, note: "session-03: both saw all 3 hostels. Warden got 403 on user management and settings write; Coordinator got 200 on both." }
+  - { id: AC-12, check: "Every state change is recorded in an append-only timeline visible to the student", status: done, note: "session-03: CREATED -> STATUS_CHANGED -> WORKER_ASSIGNED visible to the student; 18 events across the walkthrough." }
+  - { id: AC-13, check: "The public transparency board shows per-hostel statistics without a login", status: done, note: "session-03: public board rendered real per-hostel figures with no session." }
+  - { id: AC-14, check: "The whole system runs on free tiers with zero cost", status: pending, note: "The only one of the 16 still open. Not runtime-checkable until something is actually deployed — every dependency chosen IS on a permanent free tier (Vercel Hobby, Atlas M0, Cloudinary free, Gmail SMTP, GitHub Actions), but that is a design claim until P10-6 happens and the running costs table in docs/DEPLOYMENT.md is confirmed against a real bill (of $0)." }
+  - { id: AC-15, check: "npx tsc --noEmit and npx next build both pass with no errors", status: done }
+  - { id: AC-16, check: "npm run lint passes", status: done }
+
+# -----------------------------------------------------------------------------
+# OPEN QUESTIONS FOR THE USER
+# -----------------------------------------------------------------------------
+open_questions:
+  - { id: Q1, q: "MongoDB Atlas connection string?", status: open, blocks: [BLK-1] }
+  - { id: Q2, q: "Real names and e-mail addresses for the 3 RTs, the Warden and the Campus Coordinator?", status: open, blocks: [BLK-4] }
+  - { id: Q3, q: "Which SMTP — a Gmail app password (500/day) or a free Brevo account (300/day)?", status: open, blocks: [BLK-3] }
+  - { id: Q4, q: "Institute name (and a logo file) for branding the UI and the e-mails?", status: open, blocks: [BLK-5] }
+  - { id: Q5, q: "Should student registration be restricted to an institutional e-mail domain? If so, which one?", status: open }
+  - { id: Q6, q: "Which department codes are actually in use (CS, SE, EE, ME, CE, BBA, ...)?", status: open, blocks: [BLK-5] }
+  - { id: Q7, q: "Will the code live on GitHub? The free 15-minute scheduler is a GitHub Actions workflow. Without it, students can still escalate manually but nothing escalates automatically.", status: open }

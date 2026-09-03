@@ -1,0 +1,120 @@
+name: Weekly database backup
+
+# mongodump the production database, encrypt it, and keep a rolling window of
+# recent backups on a dedicated `backups` branch of this repo — no extra
+# service, no extra account, matching the project's zero-cost stance. Atlas M0
+# has NO automated backups of its own; this is the only safety net.
+#
+# WHY ENCRYPTED: the dump contains password hashes and student PII (name,
+# e-mail, phone, room number, registration number). BACKUP_ENCRYPTION_KEY must
+# be set as a repository secret before this workflow can do anything useful —
+# see docs/DEPLOYMENT.md, section "Backups".
+#
+# WHY A SQUASHED BRANCH: git repos only grow, they never shrink on their own.
+# Each run rewrites `backups` as a single fresh commit holding only the
+# retained window (default 8 weekly backups, ~2 months), so old blobs become
+# unreferenced and GitHub's server-side garbage collection reclaims the space
+# over time instead of the branch growing forever.
+
+on:
+  schedule:
+    - cron: "0 3 * * 0" # every Sunday, 03:00 UTC
+  workflow_dispatch:
+
+env:
+  RETAIN: 8
+  BRANCH: backups
+  # Bump this to a newer release from https://www.mongodb.com/try/download/database-tools
+  # when needed — nothing else in this file depends on the version.
+  TOOLS_VERSION: 100.9.4
+
+permissions:
+  contents: write
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check required secrets are set
+        run: |
+          missing=0
+          if [ -z "${MONGODB_URI:-}" ]; then
+            echo "::error::MONGODB_URI repository secret is not set."
+            missing=1
+          fi
+          if [ -z "${BACKUP_ENCRYPTION_KEY:-}" ]; then
+            echo "::error::BACKUP_ENCRYPTION_KEY repository secret is not set."
+            missing=1
+          fi
+          if [ "$missing" = "1" ]; then
+            echo "::error::See docs/DEPLOYMENT.md, section 'Backups', to generate and add these."
+            exit 1
+          fi
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+
+      - name: Install MongoDB Database Tools
+        run: |
+          curl -fsSL -o tools.tgz \
+            "https://fastdl.mongodb.org/tools/db/mongodb-database-tools-ubuntu2204-x86_64-${TOOLS_VERSION}.tgz"
+          tar -xzf tools.tgz
+          sudo mv mongodb-database-tools-*/bin/* /usr/local/bin/
+          mongodump --version
+
+      - name: Dump the database
+        run: |
+          mongodump --uri="$MONGODB_URI" --gzip --archive=dump.gz
+          size=$(stat -c%s dump.gz)
+          echo "dump.gz is ${size} bytes"
+          # A dump under 1 KB almost certainly means an empty or wrong database —
+          # fail loudly rather than silently publishing a useless backup over a
+          # good one.
+          if [ "$size" -lt 1024 ]; then
+            echo "::error::Dump is suspiciously small (${size} bytes). Refusing to publish it."
+            exit 1
+          fi
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+
+      - name: Encrypt the dump
+        run: |
+          openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt \
+            -in dump.gz -out "backup-$(date -u +%Y-%m-%d).gz.enc" \
+            -pass "pass:${BACKUP_ENCRYPTION_KEY}"
+          rm dump.gz
+        env:
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+
+      - name: Publish to the backups branch (rolling window, squashed)
+        run: |
+          NEW_FILE=$(ls backup-*.gz.enc)
+          WORKDIR="$RUNNER_TEMP/backups-branch"
+          mkdir -p "$WORKDIR"
+
+          # Pull down whatever is currently retained, so there is something to
+          # prune. It is fine — expected, on the very first run — for this to
+          # fail because the branch does not exist yet.
+          git clone --quiet --depth=1 --branch "$BRANCH" \
+            "https://github.com/${GITHUB_REPOSITORY}.git" "$WORKDIR" 2>/dev/null || true
+
+          cd "$WORKDIR"
+          rm -rf .git
+          cp "$GITHUB_WORKSPACE/$NEW_FILE" .
+
+          # Keep only the newest RETAIN backups.
+          ls backup-*.gz.enc | sort | head -n -"$RETAIN" | xargs -r rm --
+
+          git init --quiet -b "$BRANCH"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit --quiet -m "Backups as of $(date -u +%Y-%m-%d) [skip ci]"
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push --force origin "$BRANCH"
+
+          echo "Published. Files now retained:"
+          ls backup-*.gz.enc
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

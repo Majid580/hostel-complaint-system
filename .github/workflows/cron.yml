@@ -1,0 +1,28 @@
+name: HCMS scheduled sweep
+
+# Vercel Hobby cron only fires once per day, which is useless for a 24-hour
+# escalation clock. GitHub Actions gives us a free 15-minute scheduler.
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger the SLA and escalation sweep
+        run: |
+          code=$(curl -sS -o /tmp/out.json -w "%{http_code}" \
+            -X POST "$APP_URL/api/cron/sweep" \
+            -H "x-cron-secret: $CRON_SECRET" \
+            -H "content-type: application/json" \
+            --max-time 120)
+          echo "HTTP $code"
+          cat /tmp/out.json
+          if [ "$code" != "200" ]; then exit 1; fi
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}

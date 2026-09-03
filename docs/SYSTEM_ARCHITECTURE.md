@@ -4,7 +4,11 @@
 > - `project-state.yml` — machine-readable current state (what is done / in progress / pending)
 > - `docs/PROJECT_PROGRESS.md` — human-readable changelog + next actions
 >
-> Document version: **1.0** · Last updated: **2026-09-02**
+> Document version: **1.1** · Last updated: **2026-09-02**
+>
+> v1.1 reconciles this document with the code that now exists. Sections 8 and 8.1
+> carry the real installed versions and the real folder layout; section 15 records
+> where the implementation departed from the v1.0 design and why.
 
 ---
 
@@ -181,6 +185,8 @@ auto-close window, e-mail toggles, priority weights.
 #### `otp_tokens` — `{ userId, purpose, codeHash, expiresAt, attempts }` with a TTL index.
 #### `rate_limits` — `{ key, count, windowStart }` with a TTL index (serverless-safe rate limiting).
 #### `mail_queue` — `{ to, subject, html, status, attempts, lastError, sendAfter }` retry queue.
+#### `counters` — `{ _id: "complaint-2026", seq }`. Atomic `$inc` so two simultaneous submissions can never receive the same ticket number.
+#### `system_logs` — `{ level, source, message, meta }`. Cron runs, mail failures and settings changes. 60-day TTL.
 
 ### 4.2 Categories
 `ELECTRICITY`, `PLUMBING_WATER`, `INTERNET_WIFI`, `FURNITURE`, `CLEANLINESS_SANITATION`,
@@ -307,51 +313,77 @@ All windows (24 h / 48 h / 72 h) are stored in `settings` and are editable by th
 
 ## 8. Technology Stack (all free tiers)
 
+Installed versions, verified from `package.json`:
+
 | Layer | Choice | Free tier | Why |
 |---|---|---|---|
-| Framework | **Next.js (App Router) + TypeScript** | — | One deployable unit: UI + API. Server Components keep the bundle small. |
+| Framework | **Next.js 16.3.4 (App Router) + React 19.2.8 + TypeScript 5** | — | One deployable unit: UI + API. Server Components keep the bundle small. |
 | Hosting | **Vercel Hobby** | 100 GB bandwidth/mo | Zero-config Next.js, free HTTPS + subdomain. |
 | Database | **MongoDB Atlas M0** | 512 MB shared cluster | Free forever; the user already has a cluster. |
-| ODM | **Mongoose 8** | — | Schema validation, indexes, hooks; cached connection for serverless. |
+| ODM | **Mongoose 9.9.4** | — | Schema validation, indexes, hooks; cached connection for serverless. Note: v9 removed the exported `FilterQuery` type, so query objects are typed `Record<string, unknown>` and cast at the call site. |
 | Media (images/audio) | **Cloudinary** (adapter-based) | 25 GB storage + 25 GB bandwidth/mo | Handles image *and* audio, auto-compression, direct signed browser upload keeps payloads off the serverless function. Swappable adapter (`src/lib/storage/`). |
 | E-mail | **Nodemailer over SMTP** (adapter-based) | Gmail app password 500/day, Brevo 300/day | No domain purchase needed. Adapter also supports Resend. |
 | Auth | **jose (JWT) + bcryptjs** | — | No paid auth vendor, no native modules. |
-| Styling | **Tailwind CSS v4 + shadcn/ui (Radix)** | — | Accessible primitives, no runtime cost. |
-| Validation | **Zod** | — | One schema for client + server. |
+| Styling | **Tailwind CSS v4 + hand-written Radix primitives** | — | Accessible primitives, no runtime cost. Written by hand rather than pulled in via the shadcn CLI so there is no `components.json` and no generated code to reconcile later. |
+| Validation | **Zod 4.5.4** | — | One schema for client + server. |
 | Charts | **Recharts** | — | Analytics dashboards. |
 | Scheduler | **GitHub Actions cron** (every 15 min) -> signed webhook | 2 000 min/mo | Vercel Hobby cron only runs daily; GH Actions gives real 15-minute SLA sweeps. `cron-job.org` documented as an alternative. |
 | Error tracking | Console + Mongo `system_logs` | — | Sentry free tier optional, off by default. |
 
-### 8.1 Repository layout
+### 8.1 Repository layout (as built)
+
+Route groups were dropped in favour of plain `student/` and `staff/` folders — the
+URL and the folder then match, which is one less thing to hold in your head.
+
 ```
 hostel/
 ├── project-state.yml               <- machine-readable state (read every session)
 ├── docs/
 │   ├── SYSTEM_ARCHITECTURE.md      <- this file
 │   ├── PROJECT_PROGRESS.md         <- changelog + next actions
-│   ├── DEPLOYMENT.md               <- free deploy runbook
-│   └── API.md                      <- endpoint reference
+│   ├── DEPLOYMENT.md               <- (P10-1, not written yet)
+│   └── API.md                      <- (P10-2, not written yet)
 ├── .github/workflows/cron.yml      <- free 15-min scheduler
+├── scripts/
+│   ├── seed.ts                     <- staff, workers, demo students + complaints
+│   ├── syncIndexes.ts              <- build indexes in production
+│   └── runSweep.ts                 <- trigger the sweep locally
 ├── src/
+│   ├── middleware.ts               <- route protection, role redirects, CSRF, headers
 │   ├── app/
-│   │   ├── (public)/               landing, track, transparency, notices
-│   │   ├── (auth)/                 login, register, forgot/reset password
-│   │   ├── (student)/student/      dashboard, new complaint, complaint detail
-│   │   ├── (staff)/staff/          dashboard, queue, complaint detail, workers,
-│   │   │                           analytics, announcements, users, settings, audit
-│   │   └── api/                    route handlers (section 9)
-│   ├── components/                 ui/ (shadcn), complaint/, staff/, shared/
+│   │   ├── page.tsx                        landing
+│   │   ├── login|register|forgot-password|reset-password|change-password/
+│   │   ├── student/                        layout + dashboard, new, complaints/[id],
+│   │   │                                   hostel, notices, notifications
+│   │   ├── staff/                          layout + dashboard, complaints, complaints/[id],
+│   │   │                                   workers, analytics, announcements, audit,
+│   │   │                                   users, settings, notifications
+│   │   └── api/                            route handlers (section 9)
+│   ├── components/
+│   │   ├── ui/                     button.tsx, primitives.tsx, overlays.tsx
+│   │   ├── complaint/              ComplaintCard, Timeline, StatusStepper,
+│   │   │                           ImageGallery, StudentActions, CommentBox
+│   │   ├── staff/                  QueueFilters, StaffActions
+│   │   ├── media/                  useUpload, ImageUploader, AudioRecorder
+│   │   ├── shared/                 badges, NotificationsList
+│   │   ├── auth/                   AuthShell
+│   │   ├── layout/                 AppShell
+│   │   └── providers.tsx
 │   ├── lib/
-│   │   ├── auth/                   jwt, session, password, permissions, guards
+│   │   ├── api/                    response, rateLimit, loadComplaint
+│   │   ├── auth/                   jwt, session, password, permissions
+│   │   ├── config/                 env
 │   │   ├── db/                     mongoose connection cache
-│   │   ├── domain/                 statusMachine, priority, sla, escalation, regNo
-│   │   ├── storage/                cloudinary adapter + interface
-│   │   ├── mail/                   transport adapter + templates
-│   │   ├── validation/             zod schemas shared client+server
-│   │   └── utils/                  rate limit, logger, api response, dates
-│   ├── models/                     mongoose models
-│   └── types/
-└── scripts/                        seed.ts, createStaff.ts, backup.ts
+│   │   ├── domain/                 constants, regNo, statusMachine, priority, sla
+│   │   ├── mail/                   transport, templates
+│   │   ├── services/               complaints, listComplaints, getComplaintDetail,
+│   │   │                           serialize, events, notify, settings, workers,
+│   │   │                           analytics, complaintCode
+│   │   ├── storage/                cloudinary
+│   │   ├── validation/             schemas
+│   │   ├── apiClient.ts            typed fetch wrapper for the browser
+│   │   └── utils.ts
+│   └── models/                     12 Mongoose models + index.ts barrel
 ```
 
 ---
@@ -506,3 +538,37 @@ written to `notifications` for the in-app bell.
 | D8 | Denormalised `priorityScore` | Sorting/pagination in Mongo needs a stored field; recomputed on write + sweep | Compute at read time (breaks pagination) |
 | D9 | Student accounts (not anonymous-only) | Needed for "my complaints", escalation rights and spam control | Reg-no-only ticket with a tracking code (no accountability) |
 | D10 | `bcryptjs` over `bcrypt` | No native build on the deploy platform | `bcrypt`, `argon2` |
+| D11 | Plain `student/` and `staff/` folders, not route groups | The URL matches the folder; less indirection for a team that will hand this over | `(student)` / `(staff)` route groups |
+| D12 | Radix primitives written by hand, not the shadcn CLI | No `components.json`, no generated code to reconcile, full control over the token names | `npx shadcn add` |
+| D13 | `next/image` with `unoptimized` on Cloudinary URLs | Vercel's free image-optimisation quota is small and Cloudinary already transforms and compresses on delivery | Vercel image optimisation |
+| D14 | A 404, not a 403, when staff open another hostel's complaint | A 403 confirms the complaint exists; a 404 does not. Staff must not be able to probe outside their scope | 403 Forbidden |
+
+---
+
+## 15. Implementation Notes (where the build departed from v1.0)
+
+| # | v1.0 said | What was built | Why |
+|---|---|---|---|
+| 1 | Mongoose 8 | **Mongoose 9.9.4** | It is what npm installed. v9 dropped the exported `FilterQuery` type, so query objects are typed `Record<string, unknown>` and cast at the call site. Noted here because it will look odd otherwise. |
+| 2 | shadcn/ui via the CLI | Radix primitives written by hand in `components/ui/` | See D12. Three files: `button.tsx`, `primitives.tsx`, `overlays.tsx`. |
+| 3 | `/api/complaints/track?code=` (GET) | `POST /api/complaints/track` | It requires the registration number as well as the ticket number. Putting a registration number in a query string would leak it into server logs and browser history. |
+| 4 | `GET /api/export/complaints.csv` | `GET /api/export/complaints` | Next.js route segments do not take a file extension. The `Content-Disposition` header still names the download `hcms-complaints-YYYY-MM-DD.csv`. |
+| 5 | Separate analytics endpoints per report | `/api/analytics/overview` and `/api/analytics/scorecards` | Two aggregation round trips instead of four, which matters on a shared free cluster. |
+| 6 | A `WORKER` role was considered | Workers are records, not accounts | v1 keeps the login surface small. RTs update on their behalf. A magic-link worker portal is a post-P8 idea. |
+| 7 | Email verification gating access | Accounts are usable before e-mail verification | Free SMTP is flaky enough that blocking a student from filing a complaint over an undelivered e-mail would be worse than the risk it prevents. `emailVerified` is still tracked. |
+
+### 15.1 Things referenced but not yet built
+
+These are wired into the UI or metadata and will 404 until their task lands:
+
+- `/track` — the page. `POST /api/complaints/track` is finished. *(task P3-11)*
+- `/transparency` — the page. `getPublicStats()` is finished. *(task P8-6)*
+- `/manifest.webmanifest` — referenced by `src/app/layout.tsx`. *(task P9-6)*
+
+### 15.2 Verification status
+
+**No part of this system has been executed against a database.** `npx tsc --noEmit`
+and `npx next build` both pass, which means the code is internally consistent — it
+does not mean the behaviour is correct. The 16 acceptance criteria in
+`project-state.yml` are the real test, and they run in task P10-7 once
+`MONGODB_URI` is available.

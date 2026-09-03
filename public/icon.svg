@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Hostel Complaint Portal">
+  <rect width="512" height="512" rx="112" fill="#1a6a8a"/>
+  <path d="M256 108 132 156v112c0 78 52 148 124 172 72-24 124-94 124-172V156L256 108z" fill="#ffffff" opacity="0.16"/>
+  <path d="M256 108 132 156v112c0 78 52 148 124 172 72-24 124-94 124-172V156L256 108z" fill="none" stroke="#ffffff" stroke-width="22" stroke-linejoin="round"/>
+  <path d="M206 262l36 36 74-78" fill="none" stroke="#ffffff" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
