@@ -15,14 +15,42 @@ jobs:
     steps:
       - name: Trigger the SLA and escalation sweep
         run: |
-          code=$(curl -sS -o /tmp/out.json -w "%{http_code}" \
-            -X POST "$APP_URL/api/cron/sweep" \
+          # Normalise APP_URL before building the request. A trailing slash
+          # produces "https://host//api/cron/sweep", which Vercel answers with a
+          # 308 redirect rather than running anything; "http://" gets the same
+          # treatment. GitHub masks the secret in logs, so a malformed value is
+          # invisible here — better to accept every reasonable spelling than to
+          # fail on one nobody can see.
+          url="${APP_URL}"
+          url="${url%/}"           # drop a trailing slash
+          url="${url#http://}"     # drop the scheme, whichever it is
+          url="${url#https://}"
+          url="https://${url}"     # and put https back on
+
+          # -L follows a redirect if one still happens. Vercel uses 308, which
+          # preserves the POST method and the custom header on a same-host hop.
+          code=$(curl -sS -L -o /tmp/out.json -w "%{http_code}" \
+            -X POST "${url}/api/cron/sweep" \
             -H "x-cron-secret: $CRON_SECRET" \
             -H "content-type: application/json" \
             --max-time 120)
+
           echo "HTTP $code"
           cat /tmp/out.json
-          if [ "$code" != "200" ]; then exit 1; fi
+          echo
+
+          if [ "$code" = "403" ]; then
+            echo "::error::403 — the CRON_SECRET in this repo does not match the one set in Vercel."
+            exit 1
+          fi
+          if [ "$code" = "404" ]; then
+            echo "::error::404 — APP_URL does not point at the deployed app."
+            exit 1
+          fi
+          if [ "$code" != "200" ]; then
+            echo "::error::Expected HTTP 200 from the sweep, got $code."
+            exit 1
+          fi
         env:
           APP_URL: ${{ secrets.APP_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
