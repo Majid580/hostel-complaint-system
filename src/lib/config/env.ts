@@ -46,8 +46,30 @@ export const env = {
   get jwtSecret() {
     return required("JWT_SECRET");
   },
+  /**
+   * The base every e-mail link is built from.
+   *
+   * `NEXT_PUBLIC_APP_URL` is inlined at BUILD time, so forgetting it — or
+   * setting it without redeploying — silently produced e-mails pointing at
+   * localhost, which is useless to the RT who received them and gives no clue
+   * why. Vercel's own system variables are available at runtime, so fall back
+   * to the project's production domain before ever reaching for localhost.
+   *
+   * VERCEL_PROJECT_PRODUCTION_URL is the stable production domain;
+   * VERCEL_URL is the per-deployment one and is only a last resort, since a
+   * link to a specific preview deployment outlives its usefulness quickly.
+   */
   get appUrl() {
-    return optional("NEXT_PUBLIC_APP_URL", "http://localhost:3000").replace(/\/+$/, "");
+    const explicit = optional("NEXT_PUBLIC_APP_URL");
+    if (explicit) return explicit.replace(/\/+$/, "");
+
+    const vercelDomain =
+      optional("VERCEL_PROJECT_PRODUCTION_URL") || optional("VERCEL_URL");
+    if (vercelDomain) {
+      return `https://${vercelDomain.replace(/^https?:\/\//, "").replace(/\/+$/, "")}`;
+    }
+
+    return "http://localhost:3000";
   },
 
   // --- media --------------------------------------------------------------
