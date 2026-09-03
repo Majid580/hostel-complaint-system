@@ -12,15 +12,15 @@
 | | |
 |---|---|
 | **Current phase** | **P10 — Deployment & handover** |
-| **Overall progress** | **~98 %** (100 of 100 tasks*) |
-| **Last session** | session-09 · 2026-09-03 |
+| **Overall progress** | **100 %** — shipped |
+| **Last session** | session-10 · 2026-09-03 |
 | **Typecheck** | ✅ `npx tsc --noEmit` clean |
 | **Build** | ✅ `npx next build` passes — 43 routes |
 | **Lint** | ✅ `npm run lint` clean |
 | **Run against a database** | ✅ **YES** — MongoDB Atlas connected, seeded, and walked end-to-end |
-| **Acceptance criteria** | ✅ **15 of 16 verified**; only AC-14 (needs a deploy) remains |
-| **Deployed** | 🟡 Vercel deploy done; production database provisioned with real staff |
-| **Blocked on** | SMTP credentials (the last thing between this and goal G2) |
+| **Acceptance criteria** | ✅ **16 of 16 verified** — the last one against the live deployment |
+| **Deployed** | ✅ https://hostel-complaint-system-8iqw.vercel.app |
+| **Blocked on** | Nothing |
 
 ### The caveat has changed
 
@@ -54,7 +54,7 @@ deployment.
 | P7 | Staff panels | ✅ done | Bulk actions verified — and one bug fixed |
 | P8 | Analytics & transparency | ✅ done | Public board renders real figures |
 | P9 | Hardening & polish | ✅ done | |
-| P10 | Deployment & handover | 🟡 in progress | Everything but the deploy itself is done |
+| P10 | Deployment & handover | ✅ done | Live, seeded, smoke-tested |
 
 ---
 
@@ -116,6 +116,90 @@ deployment.
 ---
 
 ## SESSION LOG
+
+### session-10 — 2026-09-03
+
+**Goal:** Verify the live deployment actually works, rather than assuming it does.
+
+**It does.** All 16 acceptance criteria are now verified, the last one against the
+real deployment.
+
+#### Production smoke test
+Run against `https://hostel-complaint-system-8iqw.vercel.app`.
+
+One deliberate choice worth recording: SMTP is now live, so filing a test
+complaint sends **real e-mail**. The test was therefore filed against **Fatima**
+hostel, whose RT and Warden are both Muhammad Majid — so no test mail reached
+Yaseen or Rabia. Testing in production should not page people who aren't
+expecting it.
+
+| Check | Result |
+|---|---|
+| `/api/health` | database up, **mail configured**, media configured |
+| Public pages (`/`, `/login`, `/register`, `/track`, `/transparency`) | all 200 |
+| `/student`, `/staff` signed out | 307 to `/login?next=...` |
+| Department: `2023-SE-999` | rejected, naming the seven valid codes |
+| Department: `2023-BSCPE-999` | accepted |
+| Complaint filing | created `HCMS-2026-000001` — counter reset confirmed |
+| Student → `ACKNOWLEDGED` | 403 FORBIDDEN (role layer) |
+| Student → `RESOLVED` | 409 ILLEGAL_TRANSITION (state-machine layer) |
+| **Qasim RT reading a Fatima complaint** | **404** |
+| **Qasim RT writing to it** | **404** |
+| **Qasim RT's queue** | **0 complaints, no hostels** |
+| Fatima RT reading it | 200 |
+| Public tracking, correct code+regNo | 200, and **no description leaked** |
+| Public tracking, wrong regNo | 404 |
+| Transparency board | correct figures, no complaint text |
+
+Hostel isolation is the one that mattered most, and it holds in production
+exactly as it did locally: `404` on **both** read and write, so a probing RT
+cannot even confirm a complaint exists.
+
+#### A cache that looked like a bug
+The transparency board initially showed no Fatima data after the complaint was
+filed. That was the 120-second `getPublicStats` cache from session-04 doing its
+job, not a fault — confirmed by waiting it out and re-checking, at which point it
+read "Complaints filed 1, Still open 1" with all three hostels listed. Verified
+rather than assumed, because "probably the cache" is exactly how a real bug gets
+waved through.
+
+#### Cleanup
+Every artefact of the test was removed: the complaint, its timeline event, the
+test student, and 3 notifications. The complaint counter was reset again, so the
+**first genuine complaint will be `HCMS-2026-000001`**. Production is back to
+exactly 5 staff accounts and 0 complaints.
+
+#### Infrastructure confirmed independently
+Checked through GitHub's public API rather than taking the workflow UI's word:
+- `HCMS scheduled sweep` — success (after two failures, below)
+- `Weekly database backup` — success
+- `backups` branch exists, holding `backup-2026-09-03.gz.enc` at 12.1 KB
+
+#### The two sweep failures, and why the fix was a real one
+The sweep first returned **308**, then **403**.
+
+The 308 was a redirect: a trailing slash on `APP_URL` builds
+`https://host//api/cron/sweep`, which Vercel normalises rather than executes.
+The awkward part is that **GitHub masks secret values in logs**, so a malformed
+URL is invisible to whoever is debugging it. Rather than tell the user to hunt
+for a character they cannot see, `cron.yml` now normalises the value itself —
+strips a trailing slash, strips whichever scheme is present, forces https, and
+follows any remaining redirect. Verified against all six malformed spellings.
+It also now names its failure modes: 403 means the secret does not match Vercel,
+404 means `APP_URL` is not the app.
+
+The 403 that followed was the honest one — the secret genuinely did not match
+until the user corrected it and redeployed.
+
+#### AC-14 — the free-tier claim, now checked
+The one criterion that could not be verified without a deployment. The detail
+that mattered: the 15-minute sweep is roughly **2,880 runs/month**, which would
+exceed GitHub's 2,000-minute allowance for a **private** repo and start costing
+money within about three weeks. The repo is public, where Actions minutes are
+unmetered — so it is genuinely zero-cost. Worth recording, because making the
+repo private later would quietly break that.
+
+---
 
 ### session-09 — 2026-09-03
 

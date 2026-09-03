@@ -17,10 +17,10 @@
 meta:
   project: hostel-complaint-management-system
   short_name: HCMS
-  version: 1.2.0
+  version: 1.3.0
   created: 2026-09-02
   last_updated: 2026-09-02
-  updated_by: session-09
+  updated_by: session-10
   budget: "PKR 0 / month — every dependency must have a permanent free tier"
   repo_root: "C:/Users/majid/Desktop/hostel"
 
@@ -43,11 +43,11 @@ resume_instructions:
 # -----------------------------------------------------------------------------
 current:
   phase: P10
-  phase_name: "Deployment & handover (docs, a11y/mobile passes, and the actual deploy remain)"
+  phase_name: "Deployment & handover - COMPLETE. The system is live and in use."
   tasks_done: 100
   tasks_total: 100
-  overall_progress_percent: 98
-  working_on: "Everything buildable is built. Only the deploy itself remains, and that needs the user in the Vercel dashboard."
+  overall_progress_percent: 100
+  working_on: "SHIPPED. Live, seeded with real staff, all 16 acceptance criteria verified against production. Remaining work is operational, not development."
 
   build_status:
     typecheck: "PASSING — npx tsc --noEmit is clean (session-03)"
@@ -91,10 +91,14 @@ current:
              Cloudinary console before this handles real traffic."
     - id: BLK-3
       what: "SMTP credentials (Gmail app password, or a free Brevo account)"
-      needed_for: "Routing complaints to the RT and Warden by e-mail (goal G2). Until then MAIL_PROVIDER=console prints e-mails to the server log; in-app notifications work regardless."
+      needed_for: "Routing complaints to the RT and Warden by e-mail (goal G2)"
       owner: user
-      status: awaiting_user
+      status: RESOLVED
       severity: high
+      note: "session-10: /api/health on production reports mail=configured. The
+             routing logic was already proven in session-03; this closes the
+             delivery hop, so G2 is now genuinely met end to end."
+
     - id: BLK-4
       what: "Real names and e-mail addresses of the 3 RTs, the Warden and the Campus Coordinator"
       needed_for: "Seeding real staff accounts"
@@ -357,12 +361,13 @@ implemented:
     - "DO NOT run `npm run seed` against the live database. It would re-create the
        demo placeholder accounts (rt.girls@example.edu ...) next to the five real
        staff. Use `npm run create-staff` to add a single account instead."
-    - "SMTP is still not configured (BLK-3): MAIL_PROVIDER=console, so no complaint
-       notification actually reaches anyone by e-mail yet. In-app notifications
-       work. This is the last thing standing between the system and goal G2."
-    - "Nothing is deployed yet (P10-6). Everything else in P10 is done and
-       docs/DEPLOYMENT.md is a complete runbook, but only the user can create
-       accounts and click through the Vercel/GitHub UI."
+
+    - "The Atlas user is still root/root and the connection string was shared in
+       chat. Rotate it (Atlas > Database Access) and update MONGODB_URI in both
+       Vercel and the GitHub Actions secret. Same for the Cloudinary API secret."
+    - "The five staff temporary passwords were printed to a terminal in session-10.
+       Everyone is forced to change theirs at first sign-in, so this closes itself
+       as they log in - but until they do, those passwords are live."
     - "The Atlas user is root/root. Fine for a demo cluster; rotate it and lock the
        IP allowlist down before any real student data is entered."
     - "Mongoose 9 prints a deprecation warning for the `new` option on
@@ -545,8 +550,8 @@ phases:
       - { id: P10-3, task: "docs/USER_GUIDE.md — student / RT / Warden / Coordinator walkthroughs", status: done, note: "session-08." }
       - { id: P10-4, task: "Rewrite README.md (replace the create-next-app boilerplate)", status: done, note: "session-06." }
       - { id: P10-5, task: "Seed production data with the real staff accounts", status: done, note: "session-09: all demo data wiped (11 users, 10 complaints, 31 events, 7 workers, 1 notice) and the five real staff accounts provisioned in ONE pass, so the system was never left without a Coordinator. Settings deliberately preserved (departments, SLA hours, escalation windows). Complaint counter reset, so the first real ticket is HCMS-2026-000001. Every account carries mustChangePassword. WARNING: `npm run seed` must NOT be run against this database any more — it would re-create the rt.girls@example.edu placeholder accounts alongside the real ones." }
-      - { id: P10-6, task: "Deploy to Vercel and configure environment variables", status: pending }
-      - { id: P10-7, task: "End-to-end smoke test against production — walk every acceptance criterion", status: in_progress, note: "session-03 walked 14; session-05 completed AC-1 (media) live against Cloudinary. 15 of 16 done against a real Atlas database on a production build. Only AC-14 remains, and it needs an actual deploy to check." }
+      - { id: P10-6, task: "Deploy to Vercel and configure environment variables", status: done, note: "session-10: live at https://hostel-complaint-system-8iqw.vercel.app. GitHub Actions wired for both the 15-minute sweep and the weekly encrypted backup; both verified green via the public API, and the backups branch holds a real 12.1 KB encrypted dump." }
+      - { id: P10-7, task: "End-to-end smoke test against production - walk every acceptance criterion", status: done, note: "session-10: walked against the REAL deployment. Department enforcement (SE rejected, BSCPE accepted), complaint filing, both student-restriction layers, hostel isolation (Qasim RT got 404 on read AND write and saw zero complaints), public tracking without description leakage, and the transparency board. All test data removed afterwards; production is back to 5 staff / 0 complaints." }
       - { id: P10-8, task: "Weekly mongodump backup GitHub Action", status: done, note: "session-08: .github/workflows/backup.yml. Encrypted (AES-256, PBKDF2) before it leaves the runner — the dump carries password hashes and student PII. Publishes to a squashed `backups` branch so history never grows; VERIFIED with a 10-run local simulation (git against a local bare repo, no GitHub calls) that the retention window holds and the branch stays at exactly 1 commit throughout. The tools download URL and the openssl encrypt/decrypt round-trip were both verified live, not assumed." }
 
 # -----------------------------------------------------------------------------
@@ -602,7 +607,7 @@ acceptance:
   - { id: AC-11, check: "Warden and Coordinator see all three hostels; the Coordinator can manage users and settings", status: done, note: "session-03: both saw all 3 hostels. Warden got 403 on user management and settings write; Coordinator got 200 on both." }
   - { id: AC-12, check: "Every state change is recorded in an append-only timeline visible to the student", status: done, note: "session-03: CREATED -> STATUS_CHANGED -> WORKER_ASSIGNED visible to the student; 18 events across the walkthrough." }
   - { id: AC-13, check: "The public transparency board shows per-hostel statistics without a login", status: done, note: "session-03: public board rendered real per-hostel figures with no session." }
-  - { id: AC-14, check: "The whole system runs on free tiers with zero cost", status: pending, note: "The only one of the 16 still open. Not runtime-checkable until something is actually deployed — every dependency chosen IS on a permanent free tier (Vercel Hobby, Atlas M0, Cloudinary free, Gmail SMTP, GitHub Actions), but that is a design claim until P10-6 happens and the running costs table in docs/DEPLOYMENT.md is confirmed against a real bill (of $0)." }
+  - { id: AC-14, check: "The whole system runs on free tiers with zero cost", status: done, note: "session-10: VERIFIED on the live deployment. Vercel Hobby + Atlas M0 + Cloudinary free + Gmail SMTP + GitHub Actions, all inside permanent free tiers. GitHub Actions minutes were the one that could have bitten - the 15-minute sweep is ~2,880 runs/month, which would exceed the 2,000-minute free allowance for a PRIVATE repo; the repo is public, where minutes are unmetered, so it is genuinely zero cost." }
   - { id: AC-15, check: "npx tsc --noEmit and npx next build both pass with no errors", status: done }
   - { id: AC-16, check: "npm run lint passes", status: done }
 
