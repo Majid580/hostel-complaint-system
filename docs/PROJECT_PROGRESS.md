@@ -13,14 +13,14 @@
 |---|---|
 | **Current phase** | **P10 — Deployment & handover** |
 | **Overall progress** | **~98 %** (100 of 100 tasks*) |
-| **Last session** | session-08 · 2026-09-03 |
+| **Last session** | session-09 · 2026-09-03 |
 | **Typecheck** | ✅ `npx tsc --noEmit` clean |
 | **Build** | ✅ `npx next build` passes — 43 routes |
 | **Lint** | ✅ `npm run lint` clean |
 | **Run against a database** | ✅ **YES** — MongoDB Atlas connected, seeded, and walked end-to-end |
 | **Acceptance criteria** | ✅ **15 of 16 verified**; only AC-14 (needs a deploy) remains |
-| **Deployed** | ❌ Not yet |
-| **Blocked on** | SMTP credentials, real staff names & e-mails |
+| **Deployed** | 🟡 Vercel deploy done; production database provisioned with real staff |
+| **Blocked on** | SMTP credentials (the last thing between this and goal G2) |
 
 ### The caveat has changed
 
@@ -116,6 +116,81 @@ deployment.
 ---
 
 ## SESSION LOG
+
+### session-09 — 2026-09-03
+
+**Goal:** Push to GitHub, deploy, and put the real staff into the production
+database.
+
+#### Shipped
+Repo pushed to [Majid580/hostel-complaint-system](https://github.com/Majid580/hostel-complaint-system)
+(public, `main`), and the client deployed it on Vercel.
+
+#### The real staff — and the constraint that shaped it
+The client named one person (Muhammad Majid) for **three** roles: RT Fatima,
+Warden, and Coordinator, all under a single e-mail. The system enforces one
+account per e-mail address, so that could not be created as given.
+
+Worth stating why this mattered rather than just picking the highest role:
+**a Coordinator does not receive new-complaint e-mail.** `resolveStaffRecipients`
+builds `primaryEmails` from the hostel's RT plus the Warden only. Collapsing all
+three roles into one Coordinator account would have left Fatima with no RT and
+the system with no Warden — meaning new Fatima complaints, and every escalation,
+would have e-mailed nobody. In-app notifications would still fire, so the failure
+would have been quiet.
+
+Offered `+addressing` or three distinct addresses; the client supplied three real
+distinct addresses. All five accounts now exist with the routing chain intact.
+
+#### Go-live wipe
+Demo data removed and real staff provisioned in a **single pass**, deliberately —
+wiping first and provisioning second would leave a window with no Coordinator and
+therefore no way back in.
+
+| | Before | After |
+|---|---|---|
+| Users | 11 | 5 (real staff only) |
+| Complaints | 10 | 0 |
+| Timeline events | 31 | 0 |
+| Workers | 7 | 0 |
+| Notices | 1 | 0 |
+
+**Preserved:** the settings document — department codes (`CS, BSCPE, EE, ARCH,
+CE, ME, BME`), SLA hours, escalation windows, `requireProofOnResolve`. Verified
+after the wipe rather than assumed.
+**Reset:** the complaint counter, so the first real ticket is `HCMS-2026-000001`
+instead of continuing from the demo numbering.
+
+Every account carries `mustChangePassword`, and the temporary passwords were
+printed to the terminal — necessary, because with `MAIL_PROVIDER=console` the
+welcome e-mails went to a log nobody reads.
+
+The go-live script had two guards (`--confirm`, and a refusal to run while any
+placeholder e-mail remained); both were tested firing before it was pointed at
+real data. It was deleted afterwards rather than committed — it contained real
+addresses and is a one-time, destructive operation that should not sit in the
+repo.
+
+#### A transient failure worth not over-diagnosing
+The first run died with `Server selection timed out after 10000 ms`. Rather than
+retry blindly: DNS still resolved all three shards, general internet was fine,
+and raw TCP to port 27017 was **open on all three** in ~127 ms. A direct
+`MongoClient` ping then succeeded. So it was genuine transient flakiness during a
+network switch (the dev server's LAN address had moved from `192.168.1.x` to
+`192.168.0.x`), not the ISP's SRV blocking from session-07 and not a paused
+cluster. Retried and it worked. Noted here so the next timeout is not
+misattributed to the DNS issue.
+
+#### New footgun, recorded
+`npm run seed` must never be run against this database again — it would recreate
+the `rt.girls@example.edu` placeholder accounts alongside the five real ones.
+`npm run create-staff` is the correct tool for adding one account.
+
+**Still open:** SMTP (`MAIL_PROVIDER=console`, so no notification actually
+reaches anyone — the last thing standing between this and goal G2), the Vercel
+function region, the two GitHub Actions secrets, and the production smoke test.
+
+---
 
 ### session-08 — 2026-09-03
 

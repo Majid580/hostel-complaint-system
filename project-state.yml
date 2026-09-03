@@ -17,10 +17,10 @@
 meta:
   project: hostel-complaint-management-system
   short_name: HCMS
-  version: 1.1.0
+  version: 1.2.0
   created: 2026-09-02
   last_updated: 2026-09-02
-  updated_by: session-08
+  updated_by: session-09
   budget: "PKR 0 / month — every dependency must have a permanent free tier"
   repo_root: "C:/Users/majid/Desktop/hostel"
 
@@ -97,10 +97,17 @@ current:
       severity: high
     - id: BLK-4
       what: "Real names and e-mail addresses of the 3 RTs, the Warden and the Campus Coordinator"
-      needed_for: "Seeding real staff accounts. Placeholders (rt.girls@example.edu etc.) are used until then."
+      needed_for: "Seeding real staff accounts"
       owner: user
-      status: awaiting_user
+      status: RESOLVED
       severity: medium
+      note: "session-09. All five provisioned against the live database. One person
+             (Muhammad Majid) holds RT-Fatima, Warden and Coordinator; because the
+             system enforces one account per e-mail address, he supplied three
+             distinct addresses rather than merging the roles — which keeps e-mail
+             routing and the escalation chain intact (a Coordinator alone does not
+             receive new-complaint mail; only the hostel RT and the Warden do)."
+
     - id: BLK-5
       what: "Institute name for branding, and the department codes actually in use"
       needed_for: "NEXT_PUBLIC_INSTITUTE_NAME and registration-number department validation"
@@ -347,8 +354,12 @@ implemented:
   scripts: ["npm run seed", "npm run create-staff", "npm run db:indexes", "npm run sweep", "npm run lint", "npm run typecheck", "npm run dev", "npm run build"]
 
   known_gaps:
-    - "The seeded staff accounts are placeholders (rt.girls@example.edu ...). Real
-       names and e-mails are still needed before this is used for real (BLK-4)."
+    - "DO NOT run `npm run seed` against the live database. It would re-create the
+       demo placeholder accounts (rt.girls@example.edu ...) next to the five real
+       staff. Use `npm run create-staff` to add a single account instead."
+    - "SMTP is still not configured (BLK-3): MAIL_PROVIDER=console, so no complaint
+       notification actually reaches anyone by e-mail yet. In-app notifications
+       work. This is the last thing standing between the system and goal G2."
     - "Nothing is deployed yet (P10-6). Everything else in P10 is done and
        docs/DEPLOYMENT.md is a complete runbook, but only the user can create
        accounts and click through the Vercel/GitHub UI."
@@ -533,7 +544,7 @@ phases:
       - { id: P10-2, task: "docs/API.md — endpoint reference", status: done, note: "session-08. Every route read from source, not from memory — exact schemas, exact error codes, exact rate-limit buckets." }
       - { id: P10-3, task: "docs/USER_GUIDE.md — student / RT / Warden / Coordinator walkthroughs", status: done, note: "session-08." }
       - { id: P10-4, task: "Rewrite README.md (replace the create-next-app boilerplate)", status: done, note: "session-06." }
-      - { id: P10-5, task: "Seed production data with the real staff accounts", status: in_progress, blocked_by: [BLK-4], note: "session-03: npm run seed ran successfully against Atlas — 9 users, 7 workers, 6 demo complaints. These are PLACEHOLDER accounts (rt.girls@example.edu etc.); real names and e-mails still needed." }
+      - { id: P10-5, task: "Seed production data with the real staff accounts", status: done, note: "session-09: all demo data wiped (11 users, 10 complaints, 31 events, 7 workers, 1 notice) and the five real staff accounts provisioned in ONE pass, so the system was never left without a Coordinator. Settings deliberately preserved (departments, SLA hours, escalation windows). Complaint counter reset, so the first real ticket is HCMS-2026-000001. Every account carries mustChangePassword. WARNING: `npm run seed` must NOT be run against this database any more — it would re-create the rt.girls@example.edu placeholder accounts alongside the real ones." }
       - { id: P10-6, task: "Deploy to Vercel and configure environment variables", status: pending }
       - { id: P10-7, task: "End-to-end smoke test against production — walk every acceptance criterion", status: in_progress, note: "session-03 walked 14; session-05 completed AC-1 (media) live against Cloudinary. 15 of 16 done against a real Atlas database on a production build. Only AC-14 remains, and it needs an actual deploy to check." }
       - { id: P10-8, task: "Weekly mongodump backup GitHub Action", status: done, note: "session-08: .github/workflows/backup.yml. Encrypted (AES-256, PBKDF2) before it leaves the runner — the dump carries password hashes and student PII. Publishes to a squashed `backups` branch so history never grows; VERIFIED with a 10-run local simulation (git against a local bare repo, no GitHub calls) that the retention window holds and the branch stays at exactly 1 commit throughout. The tools download URL and the openssl encrypt/decrypt round-trip were both verified live, not assumed." }
