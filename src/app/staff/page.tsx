@@ -8,9 +8,11 @@ import {
   ClipboardList,
   Clock,
   Inbox,
+  Megaphone,
   ShieldAlert,
   Timer,
   TrendingUp,
+  Wrench,
 } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth/session";
 import { getOverview } from "@/lib/services/analytics";
@@ -264,11 +266,38 @@ export default async function StaffDashboard() {
         </div>
 
         {queue.complaints.length === 0 ? (
-          <EmptyState
-            icon={<CheckCircle2 className="size-6" />}
-            title="Nothing is waiting on staff"
-            description="Every complaint in your scope has been acknowledged, assigned or resolved. Well done."
-          />
+          overview.totals.total === 0 ? (
+            // Day one. "Nothing is waiting, well done" would be a strange thing
+            // to tell someone who has not done anything yet — and it hides the
+            // one job that genuinely needs doing before students start filing.
+            <EmptyState
+              icon={<Wrench className="size-6" />}
+              title="No complaints yet"
+              description="That is expected on a new system. Register the electricians, plumbers and cleaning staff who attend to problems — a complaint cannot be assigned to anyone until they exist here."
+              action={
+                <div className="flex flex-wrap justify-center gap-2">
+                  <Link href="/staff/workers">
+                    <Button>
+                      <Wrench />
+                      Add your workers
+                    </Button>
+                  </Link>
+                  <Link href="/staff/announcements">
+                    <Button variant="outline">
+                      <Megaphone />
+                      Post a notice
+                    </Button>
+                  </Link>
+                </div>
+              }
+            />
+          ) : (
+            <EmptyState
+              icon={<CheckCircle2 className="size-6" />}
+              title="Nothing is waiting on staff"
+              description="Every complaint in your scope has been acknowledged, assigned or resolved. Well done."
+            />
+          )
         ) : (
           <div className="space-y-3">
             {queue.complaints.map((c) => (

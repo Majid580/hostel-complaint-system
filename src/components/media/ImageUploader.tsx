@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Camera, ImagePlus, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert, Progress } from "@/components/ui/primitives";
+import { useSlowOperation } from "@/lib/hooks/useSlowOperation";
 import { useUpload, type UploadedAttachment } from "./useUpload";
 import { formatBytes } from "@/lib/utils";
 
@@ -24,6 +25,7 @@ export function ImageUploader({
   hint?: string;
 }) {
   const { uploading, progress, error, upload, clearError } = useUpload("image", folder);
+  const slow = useSlowOperation(uploading);
   const inputRef = useRef<HTMLInputElement>(null);
   const [queue, setQueue] = useState(0);
 
@@ -136,6 +138,12 @@ export function ImageUploader({
           <p className="text-xs text-muted-foreground">
             Uploading… {progress}%{queue > 1 ? ` · ${queue} files left` : ""}
           </p>
+          {slow && (
+            <p className="text-xs text-muted-foreground">
+              Still going — a phone photo is a big file and hostel Wi-Fi can be slow. Keep this page
+              open; your complaint is saved as a draft either way.
+            </p>
+          )}
         </div>
       )}
 

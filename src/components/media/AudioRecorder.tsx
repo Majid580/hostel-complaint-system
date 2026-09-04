@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Alert, Progress } from "@/components/ui/primitives";
 import { useUpload, type UploadedAttachment } from "./useUpload";
 import { formatDuration } from "@/lib/utils";
+import { useSlowOperation } from "@/lib/hooks/useSlowOperation";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 
 /**
@@ -25,6 +26,7 @@ export function AudioRecorder({
   maxSeconds?: number;
 }) {
   const { uploading, progress, error, upload, clearError } = useUpload("audio");
+  const slowUpload = useSlowOperation(uploading);
 
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
@@ -287,6 +289,11 @@ export function AudioRecorder({
           <div className="mt-3 space-y-1">
             <Progress value={progress} />
             <p className="text-xs text-muted-foreground">Uploading… {progress}%</p>
+            {slowUpload && (
+              <p className="text-xs text-muted-foreground">
+                Still going — keep this page open. Your complaint is saved as a draft either way.
+              </p>
+            )}
           </div>
         )}
       </div>

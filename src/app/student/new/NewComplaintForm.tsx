@@ -29,6 +29,7 @@ import type { UploadedAttachment } from "@/components/media/useUpload";
 import { api, errorFields, errorMessage } from "@/lib/apiClient";
 import { cn } from "@/lib/utils";
 import { useFieldErrors } from "@/lib/hooks/useFieldErrors";
+import { useDraft } from "@/lib/hooks/useDraft";
 import { ErrorSummary } from "@/components/ui/ErrorSummary";
 import {
   CATEGORIES,
@@ -82,6 +83,31 @@ export function NewComplaintForm({
 
   const { fields, setFields, jumpTo, showProblems, checkField, clearField, hasProblems } =
     useFieldErrors(FIELD_ORDER);
+
+  /**
+   * Draft. Attachments are deliberately excluded — they are already uploaded to
+   * the media host and re-attaching a stale reference is worse than asking for
+   * the photo again.
+   */
+  const draftKey = `hcms:draft:complaint:${regNo || "student"}`;
+  const { restored, discard } = useDraft(draftKey, {
+    category, title, description, location, roomNo, severity,
+  });
+  const [draftDismissed, setDraftDismissed] = useState(false);
+
+  const restoreDraft = () => {
+    if (!restored) return;
+    if (restored.category) setCategory(restored.category as Category);
+    if (restored.title) setTitle(restored.title as string);
+    if (restored.description) setDescription(restored.description as string);
+    if (restored.location) setLocation(restored.location as string);
+    if (restored.roomNo) setRoomNo(restored.roomNo as string);
+    if (restored.severity) {
+      setSeverity(restored.severity as Severity);
+      setSeverityTouched(true);
+    }
+    setDraftDismissed(true);
+  };
 
   const meta = category ? CATEGORY_META[category] : null;
 
@@ -171,6 +197,7 @@ export function NewComplaintForm({
         isAnonymous,
       });
 
+      discard();
       toast.success(`Complaint ${data.code} filed`, {
         description: "Your Resident Tutor and the Hostel Warden have been notified.",
       });
@@ -198,6 +225,33 @@ export function NewComplaintForm({
         <Alert tone="danger" icon={<TriangleAlert className="size-4" />} title="Could not file this complaint">
           {error}
         </Alert>
+      )}
+
+      {/* Offered, never applied automatically — silently refilling a form is
+          disorienting, and the draft might be from a problem already reported. */}
+      {restored && !draftDismissed && !title && !description && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/40 bg-primary-soft px-4 py-3">
+          <p className="text-sm">
+            <span className="font-semibold">You have an unfinished complaint.</span>{" "}
+            <span className="text-muted-foreground">Pick up where you left off?</span>
+          </p>
+          <div className="flex gap-2">
+            <Button type="button" size="sm" onClick={restoreDraft}>
+              Restore it
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                discard();
+                setDraftDismissed(true);
+              }}
+            >
+              Start fresh
+            </Button>
+          </div>
+        </div>
       )}
 
       <ErrorSummary fields={fields} order={FIELD_ORDER} labels={FIELD_LABEL} onJump={jumpTo} />
