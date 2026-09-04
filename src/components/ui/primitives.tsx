@@ -7,7 +7,7 @@ import * as CheckboxPrimitive from "@radix-ui/react-checkbox";
 import * as SwitchPrimitive from "@radix-ui/react-switch";
 import * as RadioGroupPrimitive from "@radix-ui/react-radio-group";
 import * as ProgressPrimitive from "@radix-ui/react-progress";
-import { Check, Circle } from "lucide-react";
+import { Check, Circle, TriangleAlert } from "lucide-react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
@@ -53,7 +53,7 @@ export function Input({ className, type, ...props }: React.ComponentProps<"input
         "placeholder:text-muted-foreground",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:border-ring",
         "disabled:cursor-not-allowed disabled:opacity-50",
-        "aria-invalid:border-destructive aria-invalid:ring-destructive/30",
+        "aria-invalid:border-destructive aria-invalid:bg-destructive/5 aria-invalid:ring-1 aria-invalid:ring-destructive/40",
         "file:border-0 file:bg-transparent file:text-sm file:font-medium",
         className,
       )}
@@ -70,7 +70,7 @@ export function Textarea({ className, ...props }: React.ComponentProps<"textarea
         "placeholder:text-muted-foreground resize-y",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:border-ring",
         "disabled:cursor-not-allowed disabled:opacity-50",
-        "aria-invalid:border-destructive aria-invalid:ring-destructive/30",
+        "aria-invalid:border-destructive aria-invalid:bg-destructive/5 aria-invalid:ring-1 aria-invalid:ring-destructive/40",
         className,
       )}
       {...props}
@@ -154,8 +154,13 @@ export function Field({
         </p>
       )}
       {error && (
-        <p id={errorId} role="alert" className="text-xs font-medium text-destructive">
-          {error}
+        <p
+          id={errorId}
+          role="alert"
+          className="flex items-start gap-1.5 text-xs font-medium text-destructive"
+        >
+          <TriangleAlert className="mt-px size-3.5 shrink-0" aria-hidden="true" />
+          <span>{error}</span>
         </p>
       )}
     </div>
