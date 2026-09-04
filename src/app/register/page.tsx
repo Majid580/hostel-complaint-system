@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { UserPlus } from "lucide-react";
+import { TriangleAlert, UserPlus } from "lucide-react";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { Button } from "@/components/ui/button";
 import { Alert, Checkbox, Field, Input } from "@/components/ui/primitives";
@@ -15,10 +15,29 @@ import {
   SelectValue,
 } from "@/components/ui/overlays";
 import { api, errorFields, errorMessage } from "@/lib/apiClient";
+import { useFieldErrors } from "@/lib/hooks/useFieldErrors";
+import { ErrorSummary } from "@/components/ui/ErrorSummary";
 import { HOSTEL_OPTIONS, type Hostel } from "@/lib/domain/constants";
 import { REG_NO_EXAMPLE, explainRegNoError, isValidRegNo } from "@/lib/domain/regNo";
 import { DEFAULT_SETTINGS } from "@/lib/domain/constants";
 import { checkPasswordStrength } from "@/lib/auth/password";
+
+/** Visual order, top to bottom. */
+const FIELD_ORDER = [
+  "name", "regNo", "email", "phone", "hostel", "roomNo",
+  "password", "confirmPassword", "acceptTerms",
+] as const;
+const FIELD_LABEL: Record<string, string> = {
+  name: "Full name",
+  regNo: "Registration number",
+  email: "E-mail",
+  phone: "Phone",
+  hostel: "Your hostel",
+  roomNo: "Room number",
+  password: "Password",
+  confirmPassword: "Confirm password",
+  acceptTerms: "Usage policy",
+};
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -36,17 +55,66 @@ export default function RegisterPage() {
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [fields, setFields] = useState<Record<string, string>>({});
 
-  const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) =>
+  const { fields, setFields, jumpTo, showProblems, checkField, clearField } =
+    useFieldErrors(FIELD_ORDER);
+
+  const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => {
     setForm((f) => ({ ...f, [key]: value }));
+    // An error that is being actively corrected should stop shouting.
+    clearField(key as string);
+  };
 
   const regNoTouched = form.regNo.length > 3;
   const regNoError = regNoTouched && !isValidRegNo(form.regNo) ? explainRegNoError(form.regNo) : "";
   const strength = form.password ? checkPasswordStrength(form.password) : null;
 
+  /**
+   * Mirrors registerSchema on the server. The server stays the authority; this
+   * exists so a student is told what to fix straight away rather than after a
+   * round trip — registration is most people's first contact with the system.
+   */
+  const validate = (): Record<string, string> => {
+    const p: Record<string, string> = {};
+
+    if (!form.name.trim()) p.name = "Enter your full name.";
+    else if (form.name.trim().length < 3) p.name = "That looks too short to be a full name.";
+
+    if (!form.regNo.trim()) p.regNo = "Enter your registration number.";
+    else if (!isValidRegNo(form.regNo)) p.regNo = explainRegNoError(form.regNo);
+
+    if (!form.email.trim()) p.email = "Enter your e-mail address.";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(form.email.trim()))
+      p.email = "That does not look like a valid e-mail address.";
+
+    if (!form.hostel) p.hostel = "Choose the hostel you live in.";
+
+    if (!form.password) p.password = "Choose a password.";
+    else {
+      const check = checkPasswordStrength(form.password);
+      if (!check.ok) p.password = check.message ?? "That password is too weak.";
+    }
+
+    if (!form.confirmPassword) p.confirmPassword = "Type your password a second time.";
+    else if (form.password !== form.confirmPassword)
+      p.confirmPassword = "These two passwords do not match.";
+
+    if (!form.acceptTerms) p.acceptTerms = "You need to accept the usage policy to continue.";
+
+    return p;
+  };
+
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (busy) return;
+
+    const problems = validate();
+    if (Object.keys(problems).length > 0) {
+      setError("");
+      showProblems(problems);
+      return;
+    }
+
     setBusy(true);
     setError("");
     setFields({});
@@ -83,10 +151,13 @@ export default function RegisterPage() {
       <form onSubmit={submit} className="space-y-5" noValidate>
         {error && <Alert tone="danger">{error}</Alert>}
 
+        <ErrorSummary fields={fields} order={FIELD_ORDER} labels={FIELD_LABEL} onJump={jumpTo} />
+
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Full name" htmlFor="name" error={fields.name} required>
             <Input
               id="name"
+              onBlur={() => checkField("name", validate())}
               autoComplete="name"
               required
               value={form.name}
@@ -120,6 +191,7 @@ export default function RegisterPage() {
           <Field label="E-mail" htmlFor="email" error={fields.email} required>
             <Input
               id="email"
+              onBlur={() => checkField("email", validate())}
               type="email"
               autoComplete="email"
               required
@@ -226,6 +298,7 @@ export default function RegisterPage() {
           >
             <Input
               id="confirmPassword"
+              onBlur={() => checkField("confirmPassword", validate())}
               type="password"
               autoComplete="new-password"
               required
@@ -250,7 +323,10 @@ export default function RegisterPage() {
           </span>
         </label>
         {fields.acceptTerms && (
-          <p className="text-xs font-medium text-destructive">{fields.acceptTerms}</p>
+          <p role="alert" className="flex items-center gap-1.5 text-xs font-medium text-destructive">
+            <TriangleAlert className="size-3.5 shrink-0" />
+            {fields.acceptTerms}
+          </p>
         )}
 
         <Button type="submit" className="w-full" size="lg" disabled={busy}>

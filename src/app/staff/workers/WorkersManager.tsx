@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { HardHat, Phone, Plus, RotateCcw, UserX } from "lucide-react";
@@ -111,7 +112,18 @@ export function WorkersManager({
     }
   };
 
+  // Only deactivation asks. Reactivating a worker has no downside.
+  const [confirmOff, setConfirmOff] = useState<SerializedWorker | null>(null);
+
   const toggleActive = async (worker: SerializedWorker) => {
+    if (worker.isActive) {
+      setConfirmOff(worker);
+      return;
+    }
+    await applyActive(worker);
+  };
+
+  const applyActive = async (worker: SerializedWorker) => {
     try {
       if (worker.isActive) {
         await api.delete(`/api/workers/${worker.id}`);
@@ -296,6 +308,17 @@ export function WorkersManager({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ConfirmDialog
+        open={Boolean(confirmOff)}
+        onOpenChange={(next) => !next && setConfirmOff(null)}
+        title={`Deactivate ${confirmOff?.name ?? ""}?`}
+        description="They will no longer appear when assigning a complaint. Their past jobs stay on record, and you can reactivate them at any time."
+        confirmLabel="Deactivate"
+        destructive
+        onConfirm={async () => {
+          if (confirmOff) await applyActive(confirmOff);
+        }}
+      />
     </div>
   );
 }

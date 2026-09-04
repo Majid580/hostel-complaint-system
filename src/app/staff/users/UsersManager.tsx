@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { KeyRound, Plus, ShieldCheck, UserCheck, UserX } from "lucide-react";
@@ -95,7 +96,20 @@ export function UsersManager({
     }
   };
 
+  // Reactivating is harmless and stays a single tap. Deactivating ends the
+  // person's live sessions immediately, which is not something to fire off a
+  // mis-tap on a phone.
+  const [confirmOff, setConfirmOff] = useState<StaffRow | null>(null);
+
   const toggleActive = async (person: StaffRow) => {
+    if (person.isActive) {
+      setConfirmOff(person);
+      return;
+    }
+    await applyActive(person);
+  };
+
+  const applyActive = async (person: StaffRow) => {
     try {
       await api.patch(`/api/users/${person.id}`, { isActive: !person.isActive });
       toast.success(
@@ -328,6 +342,32 @@ export function UsersManager({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={Boolean(confirmOff)}
+        onOpenChange={(next) => !next && setConfirmOff(null)}
+        title={`Deactivate ${confirmOff?.name ?? ""}?`}
+        description={
+          <>
+            They will be signed out immediately, on every device, and will not be able to sign in
+            again until you reactivate the account.
+            {confirmOff?.role === "RT" && confirmOff.hostel && (
+              <>
+                {" "}
+                <strong className="text-foreground">
+                  Complaints from that hostel will have no Resident Tutor to route to
+                </strong>{" "}
+                until you appoint another one.
+              </>
+            )}
+          </>
+        }
+        confirmLabel="Deactivate"
+        destructive
+        onConfirm={async () => {
+          if (confirmOff) await applyActive(confirmOff);
+        }}
+      />
     </div>
   );
 }

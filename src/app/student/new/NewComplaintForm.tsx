@@ -28,6 +28,8 @@ import { AudioRecorder } from "@/components/media/AudioRecorder";
 import type { UploadedAttachment } from "@/components/media/useUpload";
 import { api, errorFields, errorMessage } from "@/lib/apiClient";
 import { cn } from "@/lib/utils";
+import { useFieldErrors } from "@/lib/hooks/useFieldErrors";
+import { ErrorSummary } from "@/components/ui/ErrorSummary";
 import {
   CATEGORIES,
   CATEGORY_META,
@@ -40,6 +42,15 @@ import {
 } from "@/lib/domain/constants";
 
 type IconName = keyof typeof Icons;
+
+/** Visual order, top to bottom — drives both the jump target and the summary. */
+const FIELD_ORDER = ["category", "title", "description", "severity"] as const;
+const FIELD_LABEL: Record<string, string> = {
+  category: "Kind of problem",
+  title: "Short title",
+  description: "What exactly is wrong",
+  severity: "How urgent",
+};
 
 export function NewComplaintForm({
   defaultHostel,
@@ -68,7 +79,9 @@ export function NewComplaintForm({
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [fields, setFields] = useState<Record<string, string>>({});
+
+  const { fields, setFields, jumpTo, showProblems, checkField, clearField, hasProblems } =
+    useFieldErrors(FIELD_ORDER);
 
   const meta = category ? CATEGORY_META[category] : null;
 
@@ -104,43 +117,9 @@ export function NewComplaintForm({
     return problems;
   };
 
-  /** Where each problem lives, so the first one can be scrolled to and focused. */
-  const FIELD_ORDER = ["category", "title", "description", "severity"] as const;
-  const FIELD_LABEL: Record<string, string> = {
-    category: "Kind of problem",
-    title: "Short title",
-    description: "What exactly is wrong",
-    severity: "How urgent",
-  };
-
-  const jumpTo = (name: string) => {
-    const el = document.getElementById(name === "category" ? "category-group" : name);
-    if (!el) return;
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
-    // Focusing a fieldset would be meaningless; the grid gets scrolled to only.
-    if (name !== "category") window.setTimeout(() => el.focus({ preventScroll: true }), 300);
-  };
-
-  /** Re-check one field once the student leaves it. */
-  const checkField = (name: "title" | "description") => {
-    const problems = validate();
-    setFields((prev) => {
-      const next = { ...prev };
-      if (problems[name]) next[name] = problems[name];
-      else delete next[name];
-      return next;
-    });
-  };
-
   /** Clear an error the instant it stops being true, so it never nags. */
   const clearIfFixed = (name: string, value: string, min: number) => {
-    if (fields[name] && value.trim().length >= min) {
-      setFields((prev) => {
-        const next = { ...prev };
-        delete next[name];
-        return next;
-      });
-    }
+    if (fields[name] && value.trim().length >= min) clearField(name);
   };
 
   const canSubmit = useMemo(
@@ -169,9 +148,8 @@ export function NewComplaintForm({
     // and you are left hunting. Better to accept the tap and answer it.
     const problems = validate();
     if (Object.keys(problems).length > 0) {
-      setFields(problems);
       setError("");
-      jumpTo(FIELD_ORDER.find((f) => problems[f]) ?? "title");
+      showProblems(problems);
       return;
     }
 
@@ -222,40 +200,7 @@ export function NewComplaintForm({
         </Alert>
       )}
 
-      {/* A single list of everything still missing, each item jumping straight
-          to the field. On a long form the alternative is hunting for a red
-          message somewhere below the fold. */}
-      {Object.keys(fields).length > 0 && (
-        <div
-          role="alert"
-          className="rounded-xl border border-destructive/40 bg-destructive/8 p-4"
-        >
-          <p className="flex items-center gap-2 text-sm font-semibold text-destructive">
-            <TriangleAlert className="size-4 shrink-0" />
-            {Object.keys(fields).length === 1
-              ? "One thing needs your attention"
-              : `${Object.keys(fields).length} things need your attention`}
-          </p>
-          <ul className="mt-2 space-y-1">
-            {FIELD_ORDER.filter((f) => fields[f]).map((f) => (
-              <li key={f}>
-                <button
-                  type="button"
-                  onClick={() => jumpTo(f)}
-                  className="w-full text-left text-sm leading-snug text-destructive"
-                >
-                  {/* Only the field name carries the link affordance; underlining
-                      the whole sentence turns the list into a wall of red. */}
-                  <span className="font-semibold underline underline-offset-2">
-                    {FIELD_LABEL[f] ?? f}
-                  </span>
-                  <span className="text-destructive/90"> — {fields[f]}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <ErrorSummary fields={fields} order={FIELD_ORDER} labels={FIELD_LABEL} onJump={jumpTo} />
 
       <form onSubmit={submit} className="space-y-6" noValidate>
         {/* ---------- 1. What kind of problem ---------- */}
@@ -343,7 +288,7 @@ export function NewComplaintForm({
                   setTitle(e.target.value);
                   clearIfFixed("title", e.target.value, 5);
                 }}
-                onBlur={() => checkField("title")}
+                onBlur={() => checkField("title", validate())}
                 maxLength={160}
                 required
                 placeholder="No electricity in room since last night"
@@ -371,7 +316,7 @@ export function NewComplaintForm({
                   setDescription(next);
                   clearIfFixed("description", next, 10);
                 }}
-                onBlur={() => checkField("description")}
+                onBlur={() => checkField("description", validate())}
                 rows={5}
                 required
                 placeholder="The power in my room has been out since about 11 pm yesterday. The main switch trips as soon as we turn it back on, and there is a burning smell near the socket beside the study table."
@@ -540,7 +485,7 @@ export function NewComplaintForm({
           </Button>
         </div>
 
-        {!canSubmit && Object.keys(fields).length === 0 && (
+        {!canSubmit && !hasProblems && (
           <p className="text-right text-xs text-muted-foreground">
             Still to do: {[
               !category && "choose a category",
